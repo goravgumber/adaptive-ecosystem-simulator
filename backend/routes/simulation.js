@@ -51,6 +51,37 @@ const simulationRoutesFactory = (io) => {
   });
 
   /**
+   * @desc Get current user simulation state
+   * @route GET /api/simulation
+   */
+  router.get("/", authMiddleware, async (req, res) => {
+    try {
+      const latest = await Simulation.findOne({ userId: req.user.id }).sort({ step: -1 });
+      if (!latest) {
+        return res.status(404).json({ message: "No simulation state found" });
+      }
+      res.json(latest);
+    } catch (err) {
+      console.error("❌ Error fetching current simulation state:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  /**
+   * @desc Clear stored simulation history
+   * @route DELETE /api/simulation/clear
+   */
+  router.delete("/clear", authMiddleware, async (req, res) => {
+    try {
+      const deleted = await Simulation.deleteMany({ userId: req.user.id });
+      res.json({ message: "Simulation history cleared", deletedCount: deleted.deletedCount });
+    } catch (err) {
+      console.error("❌ Error clearing simulation history:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  /**
    * @desc Get live simulation status
    * @route GET /api/simulation/status
    */

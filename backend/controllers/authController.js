@@ -52,4 +52,21 @@ const login = async (req, res) => {
   }
 };
 
-module.exports = { signup, login };
+const validateToken = async (req, res) => {
+  res.json({ valid: true, userId: req.user.id });
+};
+
+const getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("_id username createdAt");
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ user });
+  } catch (err) {
+    console.error("❌ Get profile error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+module.exports = { signup, login, validateToken, getProfile };

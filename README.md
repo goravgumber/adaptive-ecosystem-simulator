@@ -129,8 +129,13 @@ npm install
 npm install @tensorflow/tfjs-node
 
 # Python ML service dependencies
-pip install flask flask-cors scikit-learn pandas numpy tensorflow joblib
+cd backend/ml-service
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
+
+> Note: The Python ML service is currently configured for scikit-learn-based model support on Python 3.14. If you need TensorFlow model support in the Python service, use Python 3.13 or earlier and add TensorFlow to `backend/ml-service/requirements.txt`.
 
 ### 3. Frontend Setup
 ```bash
@@ -175,7 +180,7 @@ Server runs on `http://localhost:5000`
 ### 2. Start the Python ML Service
 ```bash
 cd backend/ml-service
-python ml_service.py
+python app.py
 ```
 ML service runs on `http://localhost:8000`
 
@@ -193,7 +198,53 @@ Application opens at `http://localhost:3000`
 4. **Explore AI predictions** in the Predictions tab
 5. **Monitor system health** in the Monitoring tab
 
-## 📁 Project Structure
+## � Backend Setup
+
+```bash
+cd backend
+npm install
+```
+
+## 🐍 Python ML Setup
+
+```bash
+cd backend/ml-service
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+## 📁 ML Service Architecture
+
+The ML service is a standalone Flask microservice that is responsible for prediction and forecasting workloads. It is intentionally separated from the main Node.js backend so the AI pipeline can scale independently.
+
+```text
+[Frontend] --> [Node Backend] --> [ML Service Flask API]
+                     |                 |
+                     |                 --> /health
+                     |                 --> /predict/collapse
+                     |                 --> /predict/populations
+                     |
+                     --> [MongoDB]
+```
+
+- `backend/ml-service/app.py` — Flask application entrypoint
+- `backend/ml-service/config/settings.py` — runtime settings and environment configuration
+- `backend/ml-service/services/prediction_service.py` — prediction and model loading logic
+- `backend/ml-service/services/training_service.py` — model training persistence manager
+- `backend/ml-service/services/monitoring_service.py` — health checks and service metadata
+- `backend/ml-service/utils/logger.py` — structured logging with rotating files
+- `backend/ml-service/utils/validators.py` — request validation helpers
+- `backend/ml-service/models/` — persisted model artifacts
+- `backend/ml-service/logs/` — runtime and error logs
+
+## 🚢 Deployment Notes
+
+- Use `ML_SERVICE_URL` in `backend/.env` to point the Node backend to the ML service.
+- The backend health endpoint proxies ML health through `/api/health`.
+- The Python service exits if initialization fails, so startup health is explicit.
+
+## �📁 Project Structure
 
 ```
 adaptive-ecosystem-simulator/
@@ -214,7 +265,11 @@ adaptive-ecosystem-simulator/
 │   ├── routes/                 # API route definitions
 │   ├── services/               # Business logic services
 │   ├── ml-service/             # Python ML microservice
-│   │   └── ml_service.py       # Flask ML API
+│   │   ├── app.py              # Flask ML API entrypoint
+│   │   ├── config/             # Service configuration and environment settings
+│   │   ├── models/             # Pickled model artifacts
+│   │   ├── services/           # Prediction and training services
+│   │   └── utils/              # Logging and validation helpers
 │   ├── server.js               # Main server entry point
 │   └── package.json
 ├── README.md
