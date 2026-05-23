@@ -1,4 +1,4 @@
-# 🌱 Adaptive Ecosystem Simulator - new
+# 🌱 Adaptive Ecosystem Simulator
 
 > **A comprehensive real-time ecosystem simulation platform with AI-powered predictions and intelligent monitoring**
 
