@@ -1,79 +1,74 @@
+const mongoose = require("mongoose");
 const Simulation = require("../models/Simulation");
 const logger = require("../config/logger");
+const { tickQueue } = require("../queues/simulationQueue");
 
-let isRunning = true;
-let speed = 1000;
+const userState = new Map();
+
+function getUserState(userId) {
+  if (!userState.has(userId)) {
+    userState.set(userId, { isRunning: false, speed: 1000 });
+  }
+  return userState.get(userId);
+}
 
 const generateEvents = ({ plants, herbivores, carnivores }) => {
   const events = [];
-
   if (plants < 20) {
-    events.push({ message: " Plants are critically low", severity: "critical" });
+    events.push({ message: "Plants are critically low", severity: "critical" });
   }
   if (herbivores < 5) {
-    events.push({ message: " Herbivore population near extinction", severity: "critical" });
+    events.push({ message: "Herbivore population near extinction", severity: "critical" });
   }
   if (carnivores > herbivores * 2) {
-    events.push({ message: " Carnivores overpopulated relative to herbivores", severity: "warning" });
+    events.push({ message: "Carnivores overpopulated relative to herbivores", severity: "warning" });
   }
   if (plants > 200 && herbivores > 50) {
-    events.push({ message: " Ecosystem is thriving with balance", severity: "info" });
+    events.push({ message: "Ecosystem is thriving with balance", severity: "info" });
   }
-
-  const randomEvents = [
-    { message: "New plant growth detected ", severity: "info" },
-    { message: "Herbivore consumed a plant ", severity: "info" },
-    { message: "Carnivore hunted a herbivore ", severity: "warning" },
-    { message: "Population stabilized ", severity: "info" },
-    { message: "Carnivore spotted in territory ", severity: "info" },
-  ];
-  events.push(randomEvents[Math.floor(Math.random() * randomEvents.length)]);
-
   return events;
 };
 
 const saveSimulation = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { step, plants, herbivores, carnivores } = req.body;
+    const {
+      step = 1, plants = 1000, herbivores = 200, carnivores = 50,
+      plant_count, herbivore_count, predator_count,
+    } = req.body;
 
-    if (!isRunning) {
-      return res.status(403).json({ message: "Simulation is paused" });
-    }
+    const p = plant_count ?? plants;
+    const h = herbivore_count ?? herbivores;
+    const c = predator_count ?? carnivores;
 
-    const events = generateEvents({ plants, herbivores, carnivores });
-    const template = step % 2 === 0 ? "day" : "night";
-
+    const events = generateEvents({ plants: p, herbivores: h, carnivores: c });
     const simulation = new Simulation({
-      userId,
-      step,
-      plants,
-      herbivores,
-      carnivores,
-      events,
-      template,
+      userId, step, plants: p, herbivores: h, carnivores: c, events,
+      sessionId: new mongoose.Types.ObjectId(),
     });
-
     await simulation.save();
 
-    // Emit real-time update if Socket.IO is available
+    const state = getUserState(userId);
+    state.isRunning = true;
+
     if (req.io) {
       req.io.emit("simulation-update", {
-        userId,
-        step,
-        plants,
-        herbivores,
-        carnivores,
-        events,
-        template,
-        isRunning,
-        speed
+        userId, step, plants, herbivores, carnivores, events,
+        isRunning: true, speed: state.speed,
       });
     }
 
-    res.status(201).json({ message: " Simulation step saved", simulation });
+    await tickQueue.add("tick", {
+      simulationId: simulation._id,
+      sessionId: simulation.sessionId,
+      userId,
+      currentState: { plants: p, herbivores: h, carnivores: c, step },
+      initialPopulations: { plants: p, herbivores: h, carnivores: c },
+    }, { delay: state.speed });
+
+    res.status(201).json({ message: "Simulation started", simulation, isRunning: true });
   } catch (err) {
-    logger.error(" Simulation save error: %s", err.message);
+    logger.error("Simulation save error: %s", err.message);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -82,38 +77,61 @@ const resetSimulation = async (req, res) => {
   try {
     const userId = req.user.id;
     await Simulation.deleteMany({ userId });
-    isRunning = false;
-
-    // Emit reset event if Socket.IO is available
+    const state = getUserState(userId);
+    state.isRunning = false;
     if (req.io) {
-      req.io.emit("simulation-reset", {
-        userId,
-        message: "Simulation has been reset",
-        isRunning: false
-      });
+      req.io.emit("simulation-reset", { userId, message: "Simulation has been reset", isRunning: false });
     }
-
-    res.json({ message: "Simulation reset for user", isRunning });
+    res.json({ message: "Simulation reset for user", isRunning: false });
   } catch (err) {
-    logger.error(" Simulation reset error: %s", err.message);
+    logger.error("Simulation reset error: %s", err.message);
     res.status(500).json({ error: "Server error" });
   }
 };
 
-const toggleSimulation = (req, res) => {
-  isRunning = !isRunning;
-
+const toggleSimulation = async (req, res) => {
+  const userId = req.user.id;
+  const state = getUserState(userId);
+  state.isRunning = !state.isRunning;
   const responseData = {
-    message: isRunning ? " Simulation resumed" : " Simulation paused",
-    isRunning,
+    message: state.isRunning ? "Simulation resumed" : "Simulation paused",
+    isRunning: state.isRunning,
   };
 
-  // Emit toggle event if Socket.IO is available
+  if (state.isRunning) {
+    try {
+      let latest = await Simulation.findOne({ userId }).sort({ step: -1 });
+      if (!latest) {
+        latest = await Simulation.create({
+          userId,
+          step: 0,
+          plants: 1000,
+          herbivores: 200,
+          carnivores: 50,
+          events: [],
+          sessionId: new mongoose.Types.ObjectId(),
+        });
+      }
+      await tickQueue.add("tick", {
+        simulationId: latest._id,
+        sessionId: latest.sessionId || latest._id,
+        userId,
+        currentState: {
+          plants: latest.plants,
+          herbivores: latest.herbivores,
+          carnivores: latest.carnivores,
+          step: latest.step,
+        },
+        initialPopulations: null,
+      }, { delay: state.speed });
+    } catch (err) {
+      logger.error("Failed to enqueue resume tick: %s", err.message);
+    }
+  }
+
   if (req.io) {
     req.io.emit("simulation-toggle", {
-      isRunning,
-      message: responseData.message,
-      timestamp: new Date().toISOString()
+      userId, isRunning: state.isRunning, message: responseData.message, timestamp: new Date().toISOString(),
     });
   }
 
@@ -121,47 +139,21 @@ const toggleSimulation = (req, res) => {
 };
 
 const setSpeed = (req, res) => {
-  // Fixed: Changed from newSpeed to speed to match frontend
   const { speed: newSpeed } = req.body;
-
   if (!newSpeed || newSpeed < 100) {
     return res.status(400).json({ error: "Speed must be >= 100ms" });
   }
-
-  speed = newSpeed;
-
-  const responseData = { message: " Simulation speed updated", speed };
-
-  // Emit speed change event if Socket.IO is available
+  const state = getUserState(req.user.id);
+  state.speed = newSpeed;
   if (req.io) {
-    req.io.emit("simulation-speed-change", {
-      speed,
-      message: responseData.message,
-      timestamp: new Date().toISOString()
-    });
+    req.io.to(`user-${req.user.id}`).emit("simulation-speed", { speed: newSpeed, userId: req.user.id });
   }
-
-  res.json(responseData);
+  res.json({ message: "Simulation speed updated", speed: newSpeed });
 };
 
 const getSimulationStatus = (req, res) => {
-  const statusData = { isRunning, speed };
-
-  // Optionally emit status request if Socket.IO is available
-  if (req.io) {
-    req.io.emit("simulation-status-request", {
-      ...statusData,
-      timestamp: new Date().toISOString()
-    });
-  }
-
-  res.json(statusData);
+  const state = getUserState(req.user.id);
+  res.json({ isRunning: state.isRunning, speed: state.speed });
 };
 
-module.exports = {
-  saveSimulation,
-  resetSimulation,
-  toggleSimulation,
-  setSpeed,
-  getSimulationStatus,
-};
+module.exports = { saveSimulation, resetSimulation, toggleSimulation, setSpeed, getSimulationStatus };

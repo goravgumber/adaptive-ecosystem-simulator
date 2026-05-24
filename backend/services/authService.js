@@ -67,7 +67,16 @@ class AuthService {
       password: hashedPassword,
     });
 
-    return toPublicUser(user);
+    const accessToken = this.createAccessToken(user);
+    const refreshToken = await this.createRefreshToken(user);
+
+    return {
+      token: accessToken,
+      accessToken,
+      refreshToken,
+      expiresIn: config.JWT_ACCESS_EXPIRES_IN,
+      user: toPublicUser(user),
+    };
   }
 
   async login({ username, password }) {

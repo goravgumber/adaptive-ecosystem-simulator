@@ -18,7 +18,7 @@ class AIService {
     this.isInitialized = false;
     this.pythonServiceUrl = process.env.ML_SERVICE_URL || 'http://localhost:8000';
     this.pythonExecutable = process.env.PYTHON_EXECUTABLE || 'python3';
-    this.pythonScriptPath = path.join(__dirname, '../ml-service/app.py');
+    this.pythonScriptPath = path.join(__dirname, '../ml-service/ml_service.py');
     this.mlProcess = null;
     this.mlServiceReady = false;
     this.mlServiceStarting = false;
@@ -197,7 +197,7 @@ class AIService {
         throw new Error(`Health endpoint returned ${response.status}`);
       }
       const payload = await response.json();
-      return payload && payload.status === 'pass';
+      return payload && (payload.status === 'pass' || payload.status === 'ok');
     } finally {
       clearTimeout(timeout);
     }
@@ -265,9 +265,13 @@ class AIService {
       if (this.models.collapsePredictor) {
         prediction = await this.predictWithTensorFlow(features, 'collapse');
       } else {
+        const lastData = recentData[recentData.length - 1] || {};
         prediction = await this.callPythonService('/predict/collapse', {
-          recentData,
-          steps,
+          plants: lastData.plants || 0,
+          herbivores: lastData.herbivores || 0,
+          carnivores: lastData.carnivores || 0,
+          tick: lastData.step || 0,
+          history: recentData,
         });
       }
 
@@ -316,17 +320,25 @@ class AIService {
       if (this.models.populationForecaster) {
         forecast = await this.forecastWithTensorFlow(timeSeriesData, steps);
       } else {
+        const lastData = timeSeriesData[timeSeriesData.length - 1] || {};
         forecast = await this.callPythonService('/predict/populations', {
-          timeSeries: timeSeriesData,
-          steps,
+          plants: lastData.plants || 0,
+          herbivores: lastData.herbivores || 0,
+          carnivores: lastData.carnivores || 0,
+          tick: lastData.step || 0,
+          history: timeSeriesData,
         });
       }
+
+      const predictions = Array.isArray(forecast.predictions)
+        ? forecast.predictions.map((p) => (Array.isArray(p) ? { plants: p[0], herbivores: p[1], carnivores: p[2] } : p))
+        : [];
 
       await this.storePrediction({
         userId,
         type: 'forecast',
         input: timeSeriesData,
-        output: forecast,
+        output: { predictions },
         stepsAhead: steps,
         confidence: forecast.confidence || 0.7,
       });
@@ -334,7 +346,7 @@ class AIService {
       return {
         success: true,
         forecast: {
-          predictions: forecast.predictions || this.generateDummyForecast(recentData, steps),
+          predictions,
           confidence: forecast.confidence || 0.7,
           trends: forecast.trends || this.analyzeTrends(recentData),
           stepsAhead: steps,
@@ -364,8 +376,7 @@ class AIService {
 
       return await response.json();
     } catch (error) {
-      logger.warn('Python service unavailable, using fallback predictions');
-      return this.generateFallbackPrediction(endpoint, data);
+      throw new Error(`Python service error: ${error.message}`);
     }
   }
 
@@ -425,6 +436,24 @@ class AIService {
     return Math.sqrt(variance);
   }
 
+  analyzeTrends(data) {
+    if (!data || data.length < 2) return { plants: 'stable', herbivores: 'stable', carnivores: 'stable' };
+    const getTrend = (key) => {
+      const window = data.slice(-10);
+      const first = window[0][key];
+      const last = window[window.length - 1][key];
+      const pct = first !== 0 ? ((last - first) / first) : 0;
+      if (pct > 0.05) return 'increasing';
+      if (pct < -0.05) return 'decreasing';
+      return 'stable';
+    };
+    return {
+      plants: getTrend('plants'),
+      herbivores: getTrend('herbivores'),
+      carnivores: getTrend('carnivores'),
+    };
+  }
+
   getRiskLevel(risk) {
     if (risk > 0.8) return 'critical';
     if (risk > 0.6) return 'high';
@@ -445,40 +474,6 @@ class AIService {
       factors.push({ factor: 'Low carnivores', impact: 'medium' });
     }
     return factors;
-  }
-
-  generateFallbackPrediction(endpoint, data) {
-    if (endpoint.includes('collapse')) {
-      return {
-        risk: Math.min(0.95, 0.2 + Math.random() * 0.5),
-        confidence: 0.5,
-        factors: [],
-      };
-    }
-
-    if (endpoint.includes('populations')) {
-      return {
-        predictions: this.generateDummyForecast(data.timeSeries, data.steps),
-        confidence: 0.5,
-      };
-    }
-
-    return { error: 'Fallback prediction not available' };
-  }
-
-  generateDummyForecast(recentData, steps) {
-    const latest = recentData[recentData.length - 1];
-    const trend = this.calculateTrend(recentData.map((item) => item.plants));
-    const forecast = [];
-    for (let i = 1; i <= steps; i += 1) {
-      forecast.push({
-        step: latest.step + i,
-        plants: Math.max(0, latest.plants + trend * i),
-        herbivores: Math.max(0, latest.herbivores + trend * i * 0.8),
-        carnivores: Math.max(0, latest.carnivores + trend * i * 0.5),
-      });
-    }
-    return forecast;
   }
 
   async predictWithTensorFlow(features, type) {
@@ -511,6 +506,100 @@ class AIService {
     } catch (error) {
       logger.error('Error storing prediction: %s', error.message);
       return null;
+    }
+  }
+
+  async generateRecommendations(userId) {
+    try {
+      const data = await this.getRecentSimulationData(userId, 50);
+      if (data.length < 5) {
+        return { success: false, error: 'Insufficient data for recommendations' };
+      }
+
+      const latest = data[data.length - 1];
+      const riskFactors = [];
+
+      if (latest.plants < 500) {
+        riskFactors.push({
+          type: 'plants',
+          severity: 'high',
+          message: 'Plant population critically low, ecosystem may collapse',
+          action: 'Reduce herbivore population or introduce more plants',
+        });
+      }
+      if (latest.herbivores > latest.plants * 0.8) {
+        riskFactors.push({
+          type: 'herbivores',
+          severity: 'high',
+          message: 'Herbivore population exceeds sustainable levels',
+          action: 'Increase carnivore population to control herbivores',
+        });
+      }
+      if (latest.carnivores > latest.herbivores * 1.5 && latest.herbivores > 0) {
+        riskFactors.push({
+          type: 'carnivores',
+          severity: 'medium',
+          message: 'Carnivore population may outstrip herbivore supply',
+          action: 'Reduce carnivore population or increase herbivores',
+        });
+      }
+
+      const trends = {
+        plants: this.calculateTrend(data.slice(-10).map((d) => d.plants)),
+        herbivores: this.calculateTrend(data.slice(-10).map((d) => d.herbivores)),
+        carnivores: this.calculateTrend(data.slice(-10).map((d) => d.carnivores)),
+      };
+
+      return {
+        success: true,
+        recommendations: riskFactors,
+        reasoning: 'Based on current population levels and recent trends',
+        confidence: 0.7,
+      };
+    } catch (error) {
+      logger.error('Error generating recommendations: %s', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async detectPatterns(userId) {
+    try {
+      const data = await this.getRecentSimulationData(userId, 100);
+      if (data.length < 20) {
+        return { success: false, error: 'Insufficient data for pattern detection' };
+      }
+
+      const plants = data.map((d) => d.plants);
+      const herbivores = data.map((d) => d.herbivores);
+      const carnivores = data.map((d) => d.carnivores);
+
+      const detectCycles = (arr) => {
+        const peaks = [];
+        for (let i = 1; i < arr.length - 1; i++) {
+          if (arr[i] > arr[i - 1] && arr[i] > arr[i + 1]) {
+            peaks.push({ index: i, value: arr[i] });
+          }
+        }
+        return peaks.length > 2
+          ? {
+              detected: true,
+              cycleCount: peaks.length,
+              avgInterval: Math.round((peaks[peaks.length - 1].index - peaks[0].index) / (peaks.length - 1)),
+            }
+          : { detected: false, cycleCount: 0 };
+      };
+
+      return {
+        success: true,
+        patterns: {
+          plants: detectCycles(plants),
+          herbivores: detectCycles(herbivores),
+          carnivores: detectCycles(carnivores),
+        },
+      };
+    } catch (error) {
+      logger.error('Error detecting patterns: %s', error.message);
+      return { success: false, error: error.message };
     }
   }
 }
