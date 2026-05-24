@@ -10,15 +10,15 @@ export default function Header() {
   const { user, logout, loading, isAuthenticated } = useAuth();
   const location = useLocation();
 
-  // ✅ Don't render header on login page
+  //  Don't render header on login page
   if (location.pathname === "/login") return null;
 
-  // ✅ Show loading state
+  //  Show loading state
   if (loading) {
     return (
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex justify-between items-center transition duration-300">
         <h1 className="text-xl font-bold text-gray-700 dark:text-gray-100">
-          🌿 Adaptive Ecosystem Simulator
+           Adaptive Ecosystem Simulator
         </h1>
         <div className="flex items-center gap-4">
           <div className="animate-pulse bg-gray-300 dark:bg-gray-600 h-8 w-24 rounded"></div>
@@ -27,7 +27,7 @@ export default function Header() {
     );
   }
 
-  // ✅ Get display name from various possible user properties
+  //  Get display name from various possible user properties
   const getDisplayName = () => {
     if (!user) return "Guest";
     return user.username || user.name || user.email || "User";
@@ -37,16 +37,16 @@ export default function Header() {
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
   return (
-    <motion.header 
+    <motion.header
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       className="bg-white dark:bg-gray-800 shadow-md transition duration-300 sticky top-0 z-50 border-b border-gray-200 dark:border-gray-700"
     >
       <div className="px-4 py-3 flex justify-between items-center max-w-7xl mx-auto">
-        {/* ✅ Enhanced Logo/Title */}
+        {/*  Enhanced Logo/Title */}
         <Link to="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
-            <span className="text-white text-lg">🌿</span>
+            <span className="text-white text-lg"></span>
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">
@@ -58,7 +58,7 @@ export default function Header() {
           </div>
         </Link>
 
-        {/* ✅ Enhanced Right Side Controls */}
+        {/*  Enhanced Right Side Controls */}
         <div className="flex items-center gap-3">
           {/* Theme Toggle */}
           <motion.button
@@ -77,8 +77,8 @@ export default function Header() {
 
           {isAuthenticated() ? (
             <>
-              {/* ✅ Enhanced User Info */}
-              <motion.div 
+              {/*  Enhanced User Info */}
+              <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-xl px-4 py-2 shadow-sm border border-gray-200 dark:border-gray-600"
@@ -102,7 +102,7 @@ export default function Header() {
                 </div>
               </motion.div>
 
-              {/* ✅ Quick Actions */}
+              {/*  Quick Actions */}
               <div className="flex items-center gap-2">
                 {/* Settings Link */}
                 <Link
@@ -126,7 +126,7 @@ export default function Header() {
               </div>
             </>
           ) : (
-            /* ✅ Enhanced Login Button for Guests */
+            /*  Enhanced Login Button for Guests */
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -151,7 +151,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* ✅ Optional: Show connection status for real-time features */}
+      {/*  Optional: Show connection status for real-time features */}
       {isAuthenticated() && (
         <div className="px-4 py-1 bg-green-50 dark:bg-green-900/20 border-t border-green-200 dark:border-green-700">
           <div className="max-w-7xl mx-auto flex items-center justify-center">

@@ -3,6 +3,9 @@ import { useAuth } from "./AuthContext";
 import { io as ioClient } from "socket.io-client";
 
 const SimulationContext = createContext();
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.DEV ? "http://localhost:5000" : window.location.origin);
 
 export const SimulationProvider = ({ children }) => {
   const { authFetch, token } = useAuth();
@@ -33,10 +36,9 @@ export const SimulationProvider = ({ children }) => {
       return;
     }
 
-    // connect (pass token optionally for auth)
-    const socket = ioClient("http://localhost:5000", {
+    const socket = ioClient(SOCKET_URL, {
       transports: ["websocket"],
-      query: { token }, // optional: implement token check server-side if needed
+      auth: { token },
       autoConnect: true,
     });
 
@@ -96,21 +98,21 @@ export const SimulationProvider = ({ children }) => {
       console.warn("No token available, skipping snapshot save");
       return;
     }
-    
+
     try {
       const response = await authFetch("/api/simulation", {
         method: "POST",
         body: JSON.stringify(snapshot),
       });
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       const result = await response.json();
-      console.log("✅ Snapshot saved successfully:", result);
+      console.log(" Snapshot saved successfully:", result);
     } catch (err) {
-      console.error("❌ Error saving snapshot:", err);
+      console.error(" Error saving snapshot:", err);
       // Add user-friendly error handling
       addLog({
         id: Date.now(),
@@ -127,19 +129,19 @@ export const SimulationProvider = ({ children }) => {
       console.warn("No token available, skipping history load");
       return;
     }
-    
+
     try {
       const res = await authFetch("/api/simulation/logs");
       if (!res.ok) throw new Error(`Failed to load history: ${res.status}`);
-      
+
       const history = await res.json();
       if (Array.isArray(history) && history.length > 0) {
         setData(history);
         setStep(history[history.length - 1].step || 0);
-        console.log("✅ History loaded successfully:", history.length, "entries");
+        console.log(" History loaded successfully:", history.length, "entries");
       }
     } catch (err) {
-      console.error("❌ Error loading history:", err);
+      console.error(" Error loading history:", err);
       addLog({
         id: Date.now(),
         message: "Failed to load simulation history",
@@ -156,12 +158,12 @@ export const SimulationProvider = ({ children }) => {
     try {
       const res = await authFetch("/api/simulation/logs");
       if (!res.ok) throw new Error(`Failed to refresh history: ${res.status}`);
-      
+
       const history = await res.json();
       setData(history);
-      console.log("✅ History refreshed successfully");
+      console.log(" History refreshed successfully");
     } catch (err) {
-      console.error("❌ Error refreshing history:", err);
+      console.error(" Error refreshing history:", err);
     }
   };
 
@@ -188,11 +190,11 @@ export const SimulationProvider = ({ children }) => {
       };
 
       const events = [
-        { message: "New plant growth detected 🌿", severity: "info" },
-        { message: "Herbivore consumed a plant 🌱", severity: "info" },
-        { message: "Carnivore hunted a herbivore 🐇", severity: "warning" },
-        { message: "Population stabilized 🧬", severity: "info" },
-        { message: "Carnivore spotted in territory 🦊", severity: "info" },
+        { message: "New plant growth detected ", severity: "info" },
+        { message: "Herbivore consumed a plant ", severity: "info" },
+        { message: "Carnivore hunted a herbivore ", severity: "warning" },
+        { message: "Population stabilized ", severity: "info" },
+        { message: "Carnivore spotted in territory ", severity: "info" },
       ];
       const chosen = events[Math.floor(Math.random() * events.length)];
       const logEntry = {
@@ -204,8 +206,8 @@ export const SimulationProvider = ({ children }) => {
       };
 
       // Save snapshot (backend) and let backend emit alerts if needed
-      saveSnapshot({ 
-        ...newPoint, 
+      saveSnapshot({
+        ...newPoint,
         events: [chosen],
         userId: "simulation-user" // Add userId if needed
       });
@@ -222,20 +224,20 @@ export const SimulationProvider = ({ children }) => {
     setStep(0);
     try {
       if (token) {
-        const response = await authFetch("/api/simulation/reset", { 
-          method: "DELETE" 
+        const response = await authFetch("/api/simulation/reset", {
+          method: "DELETE"
         });
-        
+
         if (!response.ok) {
           throw new Error(`Reset failed: ${response.status}`);
         }
-        
-        console.log("✅ Simulation reset successfully");
+
+        console.log(" Simulation reset successfully");
       }
       setData([]);
       setLogs([]);
     } catch (err) {
-      console.error("❌ Error resetting simulation:", err);
+      console.error(" Error resetting simulation:", err);
       addLog({
         id: Date.now(),
         message: "Failed to reset simulation on server",
@@ -250,7 +252,7 @@ export const SimulationProvider = ({ children }) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     localStorage.setItem("simulationSettings", JSON.stringify(updated));
-    
+
     addLog({
       id: Date.now(),
       message: `Settings updated: ${Object.keys(newSettings).join(", ")}`,
@@ -267,15 +269,15 @@ export const SimulationProvider = ({ children }) => {
         const response = await authFetch("/api/simulation/toggle", {
           method: "POST",
         });
-        
+
         if (!response.ok) {
           throw new Error(`Toggle failed: ${response.status}`);
         }
-        
+
         const result = await response.json();
         setIsRunning(result.isRunning);
-        console.log("✅ Simulation toggled:", result.message);
-        
+        console.log(" Simulation toggled:", result.message);
+
         addLog({
           id: Date.now(),
           message: result.message,
@@ -288,7 +290,7 @@ export const SimulationProvider = ({ children }) => {
         setIsRunning(!isRunning);
       }
     } catch (err) {
-      console.error("❌ Error toggling simulation:", err);
+      console.error(" Error toggling simulation:", err);
       // Fallback to local toggle
       setIsRunning(!isRunning);
     }

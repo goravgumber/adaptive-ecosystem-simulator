@@ -1,41 +1,30 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
+import { toApiPath, unwrapApiResponse } from "../services/api";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
-  // ✅ Load user & token from localStorage on mount
-  useEffect(() => {
-    const savedUser = localStorage.getItem("user");
-    const savedToken = localStorage.getItem("token");
-
-    if (savedUser && savedToken) {
-      try {
-        setUser(JSON.parse(savedUser));
-        setToken(savedToken);
-        
-        // Validate token by making a test request
-        validateToken(savedToken);
-      } catch (error) {
-        console.error("Error loading saved auth data:", error);
-        clearAuthData();
-      }
-    }
-
-    setLoading(false);
+  const clearAuthData = useCallback(() => {
+    setUser(null);
+    setToken(null);
+    setRefreshToken(null);
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    localStorage.removeItem("refreshToken");
   }, []);
 
-  // ✅ Validate token with backend
-  const validateToken = async (tokenToValidate) => {
+  const validateToken = useCallback(async (tokenToValidate) => {
     try {
-      const res = await fetch("/api/auth/validate", {
+      const res = await fetch(toApiPath("/auth/validate"), {
         method: "GET",
         headers: {
-          "Authorization": `Bearer ${tokenToValidate}`,
+          Authorization: `Bearer ${tokenToValidate}`,
           "Content-Type": "application/json",
         },
       });
@@ -43,165 +32,207 @@ export const AuthProvider = ({ children }) => {
       if (!res.ok) {
         throw new Error("Token validation failed");
       }
-    } catch (error) {
+    } catch (_error) {
       console.warn("Token validation failed, clearing auth data");
       clearAuthData();
     }
-  };
+  }, [clearAuthData]);
 
-  // ✅ Clear authentication data
-  const clearAuthData = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-  };
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    const savedToken = localStorage.getItem("token");
+    const savedRefreshToken = localStorage.getItem("refreshToken");
 
-  // ✅ Enhanced Login with better error handling
+    if (savedUser && savedToken) {
+      try {
+        setUser(JSON.parse(savedUser));
+        setToken(savedToken);
+        if (savedRefreshToken) setRefreshToken(savedRefreshToken);
+        validateToken(savedToken);
+      } catch (_error) {
+        console.error("Error loading saved auth data:", _error);
+        clearAuthData();
+      }
+    }
+
+    setLoading(false);
+  }, [clearAuthData, validateToken]);
+
   const login = async (username, password) => {
     try {
       setLoading(true);
       setAuthError(null);
 
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(toApiPath("/auth/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await res.json();
-      
+      const payload = await res.json();
+      const data = unwrapApiResponse(payload);
+
       if (!res.ok) {
-        throw new Error(data.error || data.message || "Login failed");
+        throw new Error(payload?.error?.message || payload?.message || "Login failed");
       }
 
-      // Successful login
       setUser(data.user);
       setToken(data.token);
+      setRefreshToken(data.refreshToken);
 
       localStorage.setItem("user", JSON.stringify(data.user));
       localStorage.setItem("token", data.token);
+      localStorage.setItem("refreshToken", data.refreshToken);
 
-      console.log("✅ Login successful:", data.user.username);
       return { success: true, data };
-      
+
     } catch (err) {
       const errorMessage = err.message || "Login failed";
       setAuthError(errorMessage);
-      console.error("❌ Login error:", errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Enhanced Signup with better error handling
   const signup = async (username, password) => {
     try {
       setLoading(true);
       setAuthError(null);
 
-      const res = await fetch("/api/auth/signup", {
+      const res = await fetch(toApiPath("/auth/signup"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await res.json();
-      
+      const payload = await res.json();
+
       if (!res.ok) {
-        throw new Error(data.error || data.message || "Signup failed");
+        throw new Error(payload?.error?.message || payload?.message || "Signup failed");
       }
 
-      console.log("✅ Signup successful");
       return { success: true, message: "Signup successful! Please login." };
-      
+
     } catch (err) {
       const errorMessage = err.message || "Signup failed";
       setAuthError(errorMessage);
-      console.error("❌ Signup error:", errorMessage);
       return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Enhanced Logout
-  const logout = () => {
+  const refreshAccessToken = useCallback(async () => {
+    if (!refreshToken) {
+      throw new Error("No refresh token available");
+    }
+
+    const res = await fetch(toApiPath("/auth/refresh"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) {
+      clearAuthData();
+      throw new Error(payload?.error?.message || payload?.message || "Session refresh failed");
+    }
+
+    const data = unwrapApiResponse(payload);
+    setUser(data.user);
+    setToken(data.token);
+    setRefreshToken(data.refreshToken);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("refreshToken", data.refreshToken);
+
+    return data.token;
+  }, [clearAuthData, refreshToken]);
+
+  const logout = useCallback(async () => {
     try {
+      if (token) {
+        await fetch(toApiPath("/auth/logout"), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ refreshToken }),
+        }).catch(() => null);
+      }
       clearAuthData();
       setAuthError(null);
-      console.log("✅ Logout successful");
     } catch (error) {
-      console.error("❌ Logout error:", error);
+      console.error("Logout error:", error);
     }
-  };
+  }, [clearAuthData, refreshToken, token]);
 
-  // ✅ Enhanced authenticated fetch wrapper
-  const authFetch = async (url, options = {}) => {
+  const authFetch = useCallback(async (url, options = {}) => {
     try {
-      // Ensure we have a token
       if (!token) {
         throw new Error("No authentication token available");
       }
 
-      // Make the request
-      const res = await fetch(url, {
+      const buildRequest = (accessToken) => ({
         ...options,
         headers: {
           ...(options.headers || {}),
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${accessToken}`,
           "Content-Type": options.headers?.["Content-Type"] || "application/json",
         },
       });
 
-      // Handle authentication errors
+      let res = await fetch(toApiPath(url), buildRequest(token));
+
       if (res.status === 401) {
-        console.warn("Authentication failed, logging out user");
-        logout();
-        throw new Error("Session expired. Please login again.");
+        try {
+          const nextToken = await refreshAccessToken();
+          res = await fetch(toApiPath(url), buildRequest(nextToken));
+        } catch (_refreshError) {
+          await logout();
+          throw new Error("Session expired. Please login again.");
+        }
       }
 
-      // Handle other HTTP errors
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || `HTTP ${res.status}: ${res.statusText}`);
+        throw new Error(
+          errorData?.error?.message ||
+            errorData?.message ||
+            `HTTP ${res.status}: ${res.statusText}`
+        );
       }
 
       return res;
-      
+
     } catch (error) {
-      console.error("❌ Auth fetch error:", error);
+      console.error("Auth fetch error:", error);
       throw error;
     }
-  };
+  }, [logout, refreshAccessToken, token]);
 
-  // ✅ Helper to check if user is authenticated
   const isAuthenticated = () => {
     return !!(user && token);
   };
 
-  // ✅ Clear any auth errors
   const clearError = () => {
     setAuthError(null);
   };
 
-  // ✅ Refresh user data
   const refreshUser = async () => {
     if (!token) return;
 
-    try {
-      const response = await authFetch("/api/auth/me");
-      const userData = await response.json();
-      
-      setUser(userData.user);
-      localStorage.setItem("user", JSON.stringify(userData.user));
-      
-      return userData.user;
-    } catch (error) {
-      console.error("Failed to refresh user data:", error);
-      throw error;
-    }
+    const response = await authFetch("/auth/me");
+    const payload = await response.json();
+    const userData = unwrapApiResponse(payload);
+
+    setUser(userData.user);
+    localStorage.setItem("user", JSON.stringify(userData.user));
+
+    return userData.user;
   };
 
   return (
@@ -210,15 +241,17 @@ export const AuthProvider = ({ children }) => {
         // State
         user,
         token,
+        refreshToken,
         loading,
         authError,
-        
+
         // Methods
         login,
         signup,
         logout,
         authFetch,
-        
+        refreshAccessToken,
+
         // Utilities
         isAuthenticated,
         clearError,
@@ -230,7 +263,6 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// ✅ Custom hook
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

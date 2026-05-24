@@ -2,13 +2,13 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useSimulation } from "../context/SimulationContext";
 import { motion } from "framer-motion";
-import { 
-  ResponsiveContainer, 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
   CartesianGrid,
   BarChart,
   Bar
@@ -38,10 +38,10 @@ export default function Dashboard() {
       if (response.ok) {
         const data = await response.json();
         setSystemStatus(data);
-        console.log("✅ Status fetched successfully:", data);
+        console.log(" Status fetched successfully:", data);
       }
     } catch (error) {
-      console.error("❌ Error fetching status:", error);
+      console.error(" Error fetching status:", error);
       setError("Failed to fetch system status");
     }
   };
@@ -55,7 +55,7 @@ export default function Dashboard() {
         setPredictions(Array.isArray(data.predictions) ? data.predictions : []);
       }
     } catch (error) {
-      console.error("❌ Error fetching predictions:", error);
+      console.error(" Error fetching predictions:", error);
       // Don't set error for predictions - not critical
     }
   };
@@ -64,13 +64,13 @@ export default function Dashboard() {
     const loadDashboardData = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         await Promise.all([
           fetchSystemStatus(),
           fetchPredictions()
         ]);
-      } catch (err) {
+      } catch (_err) {
         setError("Failed to load dashboard data");
       } finally {
         setLoading(false);
@@ -82,7 +82,7 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // ✅ ULTRA-SAFE data preparation - Multiple layers of validation
+  //  ULTRA-SAFE data preparation - Multiple layers of validation
   const prepareChartData = (rawHistory) => {
     try {
       // Layer 1: Null/undefined check
@@ -145,7 +145,7 @@ export default function Dashboard() {
   };
 
   const chartData = prepareChartData(history);
-  
+
   // Safe latest data calculation
   const latestData = chartData.length > 0 ? {
     ...chartData[chartData.length - 1]
@@ -161,16 +161,16 @@ export default function Dashboard() {
   const calculateTrend = (data, key) => {
     try {
       if (!Array.isArray(data) || data.length < 3) return "0.0";
-      
+
       const recent = data.slice(-Math.min(5, data.length));
       if (recent.length < 2) return "0.0";
-      
+
       const first = recent[0][key] || 0;
       const last = recent[recent.length - 1][key] || 0;
       const steps = recent.length - 1;
-      
+
       if (steps === 0) return "0.0";
-      
+
       const trend = (last - first) / steps;
       return isNaN(trend) ? "0.0" : trend.toFixed(1);
     } catch (error) {
@@ -185,7 +185,7 @@ export default function Dashboard() {
     carnivores: calculateTrend(chartData, 'carnivores')
   };
 
-  // ✅ BULLETPROOF Custom Tooltip
+  //  BULLETPROOF Custom Tooltip
   const SafeTooltip = ({ active, payload, label }) => {
     try {
       if (!active || !payload || !Array.isArray(payload) || payload.length === 0) {
@@ -229,8 +229,8 @@ export default function Dashboard() {
         <div className="text-center">
           <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <p className="text-red-600 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Retry
@@ -244,9 +244,9 @@ export default function Dashboard() {
     <div className="p-6 space-y-6">
       {/* Welcome Header */}
       <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg">
-        <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.username || 'User'}! 👋</h1>
+        <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.username || 'User'}! </h1>
         <p className="text-blue-100">
-          {isRunning ? "🔄 Simulation is currently running" : "⏸️ Simulation is paused"} • 
+          {isRunning ? " Simulation is currently running" : " Simulation is paused"}
           {chartData.length > 0 ? ` ${chartData.length} simulation steps recorded` : " No data yet"}
         </p>
       </div>
@@ -264,12 +264,12 @@ export default function Dashboard() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Plants</p>
               <p className="text-2xl font-bold text-green-600">{latestData.plants}</p>
               <p className="text-xs text-gray-500">
-                {Number(trends.plants) > 0 ? '↗️' : Number(trends.plants) < 0 ? '↘️' : '➡️'} 
+                {Number(trends.plants) > 0 ? '' : Number(trends.plants) < 0 ? '' : ''}
                 {trends.plants}/step
               </p>
             </div>
             <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">🌱</span>
+              <span className="text-2xl"></span>
             </div>
           </div>
         </motion.div>
@@ -286,12 +286,12 @@ export default function Dashboard() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Herbivores</p>
               <p className="text-2xl font-bold text-orange-600">{latestData.herbivores}</p>
               <p className="text-xs text-gray-500">
-                {Number(trends.herbivores) > 0 ? '↗️' : Number(trends.herbivores) < 0 ? '↘️' : '➡️'} 
+                {Number(trends.herbivores) > 0 ? '' : Number(trends.herbivores) < 0 ? '' : ''}
                 {trends.herbivores}/step
               </p>
             </div>
             <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">🐰</span>
+              <span className="text-2xl"></span>
             </div>
           </div>
         </motion.div>
@@ -308,12 +308,12 @@ export default function Dashboard() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Carnivores</p>
               <p className="text-2xl font-bold text-red-600">{latestData.carnivores}</p>
               <p className="text-xs text-gray-500">
-                {Number(trends.carnivores) > 0 ? '↗️' : Number(trends.carnivores) < 0 ? '↘️' : '➡️'} 
+                {Number(trends.carnivores) > 0 ? '' : Number(trends.carnivores) < 0 ? '' : ''}
                 {trends.carnivores}/step
               </p>
             </div>
             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">🦁</span>
+              <span className="text-2xl"></span>
             </div>
           </div>
         </motion.div>
@@ -330,7 +330,7 @@ export default function Dashboard() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Total Population</p>
               <p className="text-2xl font-bold text-blue-600">{latestData.total}</p>
               <p className="text-xs text-gray-500">
-                {isRunning ? "🔄 Active" : "⏸️ Paused"}
+                {isRunning ? " Active" : " Paused"}
               </p>
             </div>
             <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -340,7 +340,7 @@ export default function Dashboard() {
         </motion.div>
       </div>
 
-      {/* ✅ SAFE CHARTS SECTION - Only LineChart and BarChart, NO AreaChart */}
+      {/*  SAFE CHARTS SECTION - Only LineChart and BarChart, NO AreaChart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Line Chart */}
         <motion.div
@@ -375,26 +375,26 @@ export default function Dashboard() {
                 <XAxis dataKey="step" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip content={<SafeTooltip />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="plants" 
-                  stroke="#16A34A" 
+                <Line
+                  type="monotone"
+                  dataKey="plants"
+                  stroke="#16A34A"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4, fill: '#16A34A' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="herbivores" 
-                  stroke="#EA580C" 
+                <Line
+                  type="monotone"
+                  dataKey="herbivores"
+                  stroke="#EA580C"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4, fill: '#EA580C' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="carnivores" 
-                  stroke="#DC2626" 
+                <Line
+                  type="monotone"
+                  dataKey="carnivores"
+                  stroke="#DC2626"
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4, fill: '#DC2626' }}
@@ -458,7 +458,7 @@ export default function Dashboard() {
             <Database className="w-5 h-5 text-blue-500" />
             System Status
           </h3>
-          
+
           {systemStatus ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -496,7 +496,7 @@ export default function Dashboard() {
             <Zap className="w-5 h-5 text-purple-500" />
             AI Predictions
           </h3>
-          
+
           {predictions && predictions.length > 0 ? (
             <div className="space-y-3">
               {predictions.slice(0, 3).map((prediction, index) => (
@@ -515,11 +515,11 @@ export default function Dashboard() {
                 </div>
               ))}
               <div className="pt-2">
-                <a 
-                  href="/predictions" 
+                <a
+                  href="/predictions"
                   className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  View all predictions →
+                  View all predictions
                 </a>
               </div>
             </div>
@@ -528,8 +528,8 @@ export default function Dashboard() {
               <div className="text-center">
                 <Zap className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No AI predictions yet</p>
-                <a 
-                  href="/predictions" 
+                <a
+                  href="/predictions"
                   className="text-sm text-blue-600 hover:text-blue-700 mt-1 block"
                 >
                   Generate predictions

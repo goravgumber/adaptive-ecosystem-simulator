@@ -12,7 +12,7 @@ const ecosystemData = {
     { id: 2, name: "Wolves", population: 5 },
   ],
   environment: {
-    temperature: "22°C",
+    temperature: "22C",
     rainfall: "Moderate",
   },
 };

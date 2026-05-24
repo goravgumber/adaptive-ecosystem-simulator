@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { 
-  Brain, 
-  TrendingUp, 
-  AlertTriangle, 
-  Lightbulb, 
+import {
+  Brain,
+  TrendingUp,
+  AlertTriangle,
+  Lightbulb,
   Activity,
   Zap,
   RefreshCw
@@ -17,7 +17,7 @@ export default function AIInsights({ userId, authFetch }) {
 
   const fetchInsights = async () => {
     if (!userId || !authFetch) return;
-    
+
     setLoading(true);
     try {
       // Fetch recent predictions to generate insights
@@ -37,11 +37,11 @@ export default function AIInsights({ userId, authFetch }) {
 
   const generateInsightsFromPredictions = (predictions) => {
     const insights = [];
-    
+
     // Find collapse predictions
     const collapsePredictions = predictions.filter(p => p.type === 'collapse');
     const latestCollapse = collapsePredictions[0];
-    
+
     if (latestCollapse && latestCollapse.output?.collapseRisk > 0.7) {
       insights.push({
         id: 'high-collapse-risk',
@@ -67,11 +67,11 @@ export default function AIInsights({ userId, authFetch }) {
     // Find forecast trends
     const forecastPredictions = predictions.filter(p => p.type === 'forecast');
     const latestForecast = forecastPredictions[0];
-    
+
     if (latestForecast?.output?.trends) {
       const trends = latestForecast.output.trends;
-      const decliningPops = Object.entries(trends).filter(([pop, trend]) => trend === 'decreasing');
-      
+      const decliningPops = Object.entries(trends).filter(([, trend]) => trend === 'decreasing');
+
       if (decliningPops.length > 0) {
         insights.push({
           id: 'declining-populations',
@@ -88,7 +88,7 @@ export default function AIInsights({ userId, authFetch }) {
     // Check high-confidence recommendations
     const recommendationPredictions = predictions.filter(p => p.type === 'recommendations');
     const highConfidenceRecs = recommendationPredictions.filter(p => p.confidence > 0.8);
-    
+
     if (highConfidenceRecs.length > 0) {
       insights.push({
         id: 'high-confidence-recommendations',
@@ -175,7 +175,7 @@ export default function AIInsights({ userId, authFetch }) {
           <Brain className="w-5 h-5 text-blue-500" />
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">AI Insights</h3>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {lastUpdate && (
             <span className="text-xs text-gray-500">

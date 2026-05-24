@@ -1,30 +1,30 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import { AlertTriangle, AlertOctagon, CheckCircle } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const AlertsPanel = () => {
+  const { authFetch } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        const token = localStorage.getItem("token"); // 🔑 assumes JWT stored in localStorage
-        const res = await axios.get("/api/alerts", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setAlerts(res.data.alerts || []);
+        const res = await authFetch("/alerts");
+        const payload = await res.json();
+        const data = payload.data || payload;
+        setAlerts(data.alerts || []);
       } catch (err) {
-        console.error("❌ Error fetching alerts:", err);
+        console.error("Error fetching alerts:", err);
       } finally {
         setLoading(false);
       }
     };
 
     fetchAlerts();
-    const interval = setInterval(fetchAlerts, 5000); // 🔄 auto-refresh every 5s
+    const interval = setInterval(fetchAlerts, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [authFetch]);
 
   const getAlertStyle = (type) => {
     switch (type) {
@@ -56,14 +56,14 @@ const AlertsPanel = () => {
     return (
       <div className="p-4 bg-green-100 border border-green-400 rounded-xl flex items-center gap-2 text-green-800">
         <CheckCircle className="w-5 h-5" />
-        <span>✅ Ecosystem stable – no active alerts.</span>
+        <span>Ecosystem stable. No active alerts.</span>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <h2 className="text-lg font-bold text-gray-800">⚡ Live Alerts</h2>
+      <h2 className="text-lg font-bold text-gray-800">Live Alerts</h2>
       {alerts.map((alert, idx) => (
         <div
           key={idx}

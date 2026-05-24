@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Brain, 
-  TrendingUp, 
-  AlertTriangle, 
-  Target, 
-  BarChart3, 
+import {
+  Brain,
+  TrendingUp,
+  AlertTriangle,
+  Target,
+  BarChart3,
   Zap,
   Clock,
   CheckCircle,
@@ -15,13 +15,13 @@ import {
   Lightbulb,
   Activity
 } from "lucide-react";
-import { 
-  ResponsiveContainer, 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
   CartesianGrid,
   RadialBarChart,
   RadialBar,
@@ -34,7 +34,7 @@ import {
 
 const COLORS = {
   critical: '#DC2626',
-  high: '#EA580C', 
+  high: '#EA580C',
   moderate: '#D97706',
   low: '#65A30D',
   minimal: '#16A34A'
@@ -112,7 +112,7 @@ export default function Predictions() {
       setLastUpdate(new Date());
 
     } catch (error) {
-      console.error("❌ Error fetching predictions:", error);
+      console.error(" Error fetching predictions:", error);
       setError("Failed to fetch predictions");
     } finally {
       setLoading({ collapse: false, forecast: false, recommendations: false, patterns: false });
@@ -128,7 +128,7 @@ export default function Predictions() {
         setStats(data.stats);
       }
     } catch (error) {
-      console.error("❌ Error fetching prediction stats:", error);
+      console.error(" Error fetching prediction stats:", error);
     }
   };
 
@@ -159,8 +159,8 @@ export default function Predictions() {
         plants: Math.max(0, Number(point.plants) || 0),
         herbivores: Math.max(0, Number(point.herbivores) || 0),
         carnivores: Math.max(0, Number(point.carnivores) || 0)
-      })).filter(point => 
-        typeof point.step === 'number' && 
+      })).filter(point =>
+        typeof point.step === 'number' &&
         !isNaN(point.step) &&
         !isNaN(point.plants) &&
         !isNaN(point.herbivores) &&
@@ -209,7 +209,7 @@ export default function Predictions() {
             Machine learning powered ecosystem analysis and forecasting
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="text-sm text-gray-500 dark:text-gray-400">
             Last updated: {lastUpdate.toLocaleTimeString()}

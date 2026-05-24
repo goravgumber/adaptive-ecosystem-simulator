@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 import {
   BarChart,
   Bar,
@@ -18,6 +19,7 @@ import {
 const COLORS = ["#4CAF50", "#2196F3", "#FF5722"];
 
 function Reports() {
+  const { authFetch } = useAuth();
   const [filterSteps, setFilterSteps] = useState("all");
   const [reportData, setReportData] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -27,20 +29,21 @@ function Reports() {
   useEffect(() => {
     const fetchReports = async () => {
       try {
-        let url = "http://localhost:5000/api/reports/summary";
+        let url = "/reports/summary";
         if (filterSteps !== "all") {
           url += `?limit=${filterSteps}`;
         }
-        const res = await fetch(url);
+        const res = await authFetch(url);
         const json = await res.json();
-        setReportData(json.data || []);
-        setSummary(json.summary || null);
+        const payload = json.success && json.data ? json.data : json;
+        setReportData(payload.data || []);
+        setSummary(payload.summary || null);
       } catch (err) {
         console.error("Failed to fetch reports:", err);
       }
     };
     fetchReports();
-  }, [filterSteps]);
+  }, [filterSteps, authFetch]);
 
   const latestData =
     reportData.length > 0
@@ -48,28 +51,28 @@ function Reports() {
       : { plants: 0, herbivores: 0, carnivores: 0 };
 
   const pieData = [
-    { name: "Plants 🌱", value: latestData.plants },
-    { name: "Herbivores 🐇", value: latestData.herbivores },
-    { name: "Carnivores 🦊", value: latestData.carnivores },
+    { name: "Plants", value: latestData.plants },
+    { name: "Herbivores", value: latestData.herbivores },
+    { name: "Carnivores", value: latestData.carnivores },
   ];
 
   const handleClearDatabase = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/simulation/clear", {
+      const res = await authFetch("/simulation/clear", {
         method: "DELETE",
       });
 
       if (res.ok) {
-        alert("Database cleared successfully 🚀");
+        alert("Database cleared successfully.");
         setReportData([]);
         setSummary(null);
       } else {
-        alert("❌ Failed to clear database");
+        alert("Failed to clear database.");
       }
     } catch (err) {
       console.error(err);
-      alert("⚠️ Error connecting to backend");
+      alert("Error connecting to backend.");
     } finally {
       setLoading(false);
     }
@@ -96,7 +99,7 @@ function Reports() {
   return (
     <div className="space-y-8">
       <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
-        📑 Ecosystem Reports
+        Ecosystem Reports
       </h2>
 
       <div className="flex gap-2 items-center">
@@ -198,14 +201,14 @@ function Reports() {
           onClick={handleExportCSV}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
         >
-          Export CSV 📥
+          Export CSV
         </button>
         <button
           onClick={handleClearDatabase}
           disabled={loading}
           className="px-4 py-2 bg-red-600 text-white rounded-lg shadow hover:bg-red-700 disabled:opacity-50"
         >
-          {loading ? "Clearing..." : "Clear Database 🗑️"}
+          {loading ? "Clearing..." : "Clear Database "}
         </button>
       </div>
     </div>

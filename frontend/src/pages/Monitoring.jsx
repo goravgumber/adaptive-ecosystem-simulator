@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { motion } from "framer-motion";
-import { 
-  ResponsiveContainer, 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
   CartesianGrid,
   BarChart,
   Bar,
@@ -51,7 +51,7 @@ export default function Monitoring() {
         setMetrics(Array.isArray(data.metrics) ? data.metrics : []);
       }
     } catch (error) {
-      console.error("❌ Error fetching metrics:", error);
+      console.error(" Error fetching metrics:", error);
     }
   };
 
@@ -64,7 +64,7 @@ export default function Monitoring() {
         setSystemStatus(data);
       }
     } catch (error) {
-      console.error("❌ Error fetching system status:", error);
+      console.error(" Error fetching system status:", error);
       setError("Failed to fetch system status");
     }
   };
@@ -78,7 +78,7 @@ export default function Monitoring() {
         setAlerts(Array.isArray(data.alerts) ? data.alerts : []);
       }
     } catch (error) {
-      console.error("❌ Error fetching alerts:", error);
+      console.error(" Error fetching alerts:", error);
     }
   };
 
@@ -86,7 +86,7 @@ export default function Monitoring() {
   const fetchAllData = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       await Promise.all([
         fetchMetrics(),
@@ -94,7 +94,7 @@ export default function Monitoring() {
         fetchAlerts()
       ]);
       setLastUpdate(new Date());
-    } catch (err) {
+    } catch (_err) {
       setError("Failed to load monitoring data");
     } finally {
       setLoading(false);
@@ -103,13 +103,13 @@ export default function Monitoring() {
 
   useEffect(() => {
     fetchAllData();
-    
+
     // Auto-refresh every 30 seconds
     const interval = setInterval(fetchAllData, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // ✅ SAFE data preparation for charts - NO AreaChart usage!
+  //  SAFE data preparation for charts - NO AreaChart usage!
   const prepareMetricsData = (rawMetrics) => {
     try {
       if (!rawMetrics || !Array.isArray(rawMetrics) || rawMetrics.length === 0) {
@@ -160,7 +160,7 @@ export default function Monitoring() {
     connections: 0
   };
 
-  // ✅ SAFE Custom Tooltip
+  //  SAFE Custom Tooltip
   const SafeTooltip = ({ active, payload, label }) => {
     try {
       if (!active || !payload || !Array.isArray(payload) || payload.length === 0) {
@@ -220,7 +220,7 @@ export default function Monitoring() {
         <div className="text-center">
           <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <p className="text-red-600 mb-4">{error}</p>
-          <button 
+          <button
             onClick={fetchAllData}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
@@ -244,7 +244,7 @@ export default function Monitoring() {
             Real-time system performance and health metrics
           </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="text-sm text-gray-500 dark:text-gray-400">
             Last updated: {lastUpdate.toLocaleTimeString()}
@@ -272,7 +272,7 @@ export default function Monitoring() {
               <p className="text-sm text-gray-500 dark:text-gray-400">CPU Usage</p>
               <p className="text-2xl font-bold text-blue-600">{latestMetric.cpu.toFixed(1)}%</p>
               <p className="text-xs text-gray-500">
-                {latestMetric.cpu > 80 ? '⚠️ High' : latestMetric.cpu > 60 ? '📊 Moderate' : '✅ Normal'}
+                {latestMetric.cpu > 80 ? ' High' : latestMetric.cpu > 60 ? ' Moderate' : ' Normal'}
               </p>
             </div>
             <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -292,7 +292,7 @@ export default function Monitoring() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Memory Usage</p>
               <p className="text-2xl font-bold text-green-600">{latestMetric.memory.toFixed(1)}%</p>
               <p className="text-xs text-gray-500">
-                {latestMetric.memory > 80 ? '⚠️ High' : latestMetric.memory > 60 ? '📊 Moderate' : '✅ Normal'}
+                {latestMetric.memory > 80 ? ' High' : latestMetric.memory > 60 ? ' Moderate' : ' Normal'}
               </p>
             </div>
             <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
@@ -312,7 +312,7 @@ export default function Monitoring() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Active Connections</p>
               <p className="text-2xl font-bold text-purple-600">{latestMetric.connections}</p>
               <p className="text-xs text-gray-500">
-                {latestMetric.connections > 100 ? '📈 High' : '📊 Normal'}
+                {latestMetric.connections > 100 ? ' High' : ' Normal'}
               </p>
             </div>
             <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
@@ -372,29 +372,29 @@ export default function Monitoring() {
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis 
-                  dataKey="time" 
+                <XAxis
+                  dataKey="time"
                   tick={{ fontSize: 12 }}
                   interval="preserveStartEnd"
                 />
-                <YAxis 
+                <YAxis
                   tick={{ fontSize: 12 }}
                   domain={[0, 100]}
                 />
                 <Tooltip content={<SafeTooltip />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="cpu" 
-                  stroke="#3B82F6" 
+                <Line
+                  type="monotone"
+                  dataKey="cpu"
+                  stroke="#3B82F6"
                   strokeWidth={2}
                   dot={false}
                   name="CPU Usage"
                   activeDot={{ r: 4, fill: '#3B82F6' }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="memory" 
-                  stroke="#10B981" 
+                <Line
+                  type="monotone"
+                  dataKey="memory"
+                  stroke="#10B981"
                   strokeWidth={2}
                   dot={false}
                   name="Memory Usage"
@@ -479,7 +479,7 @@ export default function Monitoring() {
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="capitalize">
-                        {alert.category || 'system'} • {alert.type || 'alert'}
+                        {alert.category || 'system'}  {alert.type || 'alert'}
                       </span>
                       <span className="text-gray-500">
                         {alert.timestamp ? new Date(alert.timestamp).toLocaleString() : 'Recently'}
@@ -512,7 +512,7 @@ export default function Monitoring() {
             <Database className="w-5 h-5 text-blue-500" />
             System Information
           </h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Database</h4>
@@ -522,8 +522,8 @@ export default function Monitoring() {
                   <span className={`flex items-center gap-1 ${
                     systemStatus.dbStatus?.includes('Connected') ? 'text-green-600' : 'text-red-600'
                   }`}>
-                    {systemStatus.dbStatus?.includes('Connected') ? 
-                      <CheckCircle className="w-4 h-4" /> : 
+                    {systemStatus.dbStatus?.includes('Connected') ?
+                      <CheckCircle className="w-4 h-4" /> :
                       <XCircle className="w-4 h-4" />
                     }
                     {systemStatus.dbStatus || 'Unknown'}

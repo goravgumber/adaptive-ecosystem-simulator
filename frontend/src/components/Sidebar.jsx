@@ -23,7 +23,7 @@ export default function Sidebar() {
   return (
     <div className="w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-gray-100 flex flex-col p-4 shadow-2xl">
       <h1 className="text-2xl font-extrabold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500 animate-pulse">
-        EcoSim 🌱
+        EcoSim
       </h1>
 
       <nav className="space-y-2">
@@ -63,7 +63,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="mt-auto pt-6 text-xs text-gray-400 text-center border-t border-gray-700">
-        © {new Date().getFullYear()} EcoSim | Adaptive Ecosystem
+         {new Date().getFullYear()} EcoSim | Adaptive Ecosystem
       </div>
     </div>
   );

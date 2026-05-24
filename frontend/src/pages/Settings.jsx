@@ -29,11 +29,11 @@ function Settings() {
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">⚙ Simulation Settings</h2>
+      <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200"> Simulation Settings</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4 card p-6">
         <div>
-          <label className="block text-gray-700 dark:text-gray-300 mb-1">🌱 Starting Plants</label>
+          <label className="block text-gray-700 dark:text-gray-300 mb-1"> Starting Plants</label>
           <input
             type="number"
             name="plants"
@@ -45,7 +45,7 @@ function Settings() {
         </div>
 
         <div>
-          <label className="block text-gray-700 dark:text-gray-300 mb-1">🐇 Starting Herbivores</label>
+          <label className="block text-gray-700 dark:text-gray-300 mb-1"> Starting Herbivores</label>
           <input
             type="number"
             name="herbivores"
@@ -57,7 +57,7 @@ function Settings() {
         </div>
 
         <div>
-          <label className="block text-gray-700 dark:text-gray-300 mb-1">🦊 Starting Carnivores</label>
+          <label className="block text-gray-700 dark:text-gray-300 mb-1"> Starting Carnivores</label>
           <input
             type="number"
             name="carnivores"
@@ -69,7 +69,7 @@ function Settings() {
         </div>
 
         <div>
-          <label className="block text-gray-700 dark:text-gray-300 mb-1">⚡ Simulation Speed (ms per tick)</label>
+          <label className="block text-gray-700 dark:text-gray-300 mb-1"> Simulation Speed (ms per tick)</label>
           <input
             type="number"
             name="speed"
@@ -90,7 +90,7 @@ function Settings() {
       </form>
       <div className="card p-6">
         <h3 className="text-lg font-semibold mb-4 text-gray-800 dark:text-gray-200">
-          📊 Preview Simulation (first 5 ticks)
+           Preview Simulation (first 5 ticks)
         </h3>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={previewData}>

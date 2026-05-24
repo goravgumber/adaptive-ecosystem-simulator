@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 🌎 Global Custom Styles */
+/*  Global Custom Styles */
 body {
   @apply bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans;
   margin: 0;
@@ -15,8 +15,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 a {
-  @apply text-blue-600 hover:text-blue-800 
-         dark:text-blue-400 dark:hover:text-blue-300 
+  @apply text-blue-600 hover:text-blue-800
+         dark:text-blue-400 dark:hover:text-blue-300
          transition-colors;
 }
 

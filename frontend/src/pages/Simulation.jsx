@@ -36,26 +36,26 @@ export default function Simulation() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
-          🧪 Live Simulation
+           Live Simulation
         </h2>
         <div className="flex gap-3">
           {!isRunning ? (
             <button onClick={startSimulation} className="btn">
-              ▶ Start
+               Start
             </button>
           ) : (
             <button
               onClick={pauseSimulation}
               className="btn bg-yellow-500 hover:bg-yellow-600"
             >
-              ⏸ Pause
+               Pause
             </button>
           )}
           <button
             onClick={resetSimulation}
             className="btn bg-red-500 hover:bg-red-600"
           >
-            🔄 Reset
+             Reset
           </button>
         </div>
       </div>
@@ -77,7 +77,7 @@ export default function Simulation() {
               settings.speed === speedPresets.slow ? "bg-blue-600 text-white" : ""
             }`}
           >
-            🐢 Slow
+             Slow
           </button>
           <button
             onClick={() => handleSpeedChange("normal")}
@@ -85,7 +85,7 @@ export default function Simulation() {
               settings.speed === speedPresets.normal ? "bg-blue-600 text-white" : ""
             }`}
           >
-            ⚖ Normal
+             Normal
           </button>
           <button
             onClick={() => handleSpeedChange("fast")}
@@ -93,7 +93,7 @@ export default function Simulation() {
               settings.speed === speedPresets.fast ? "bg-blue-600 text-white" : ""
             }`}
           >
-            ⚡ Fast
+             Fast
           </button>
         </div>
       </div>

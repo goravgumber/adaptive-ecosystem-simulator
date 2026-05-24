@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  AlertTriangle, 
-  AlertOctagon, 
-  CheckCircle, 
-  X, 
-  Filter, 
-  Clock, 
-  User, 
+import {
+  AlertTriangle,
+  AlertOctagon,
+  CheckCircle,
+  X,
+  Filter,
+  Clock,
+  User,
   Database,
   Cpu,
   Activity,
@@ -32,15 +32,15 @@ export default function Alerts() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch current alerts
       const alertsResponse = await authFetch("/api/alerts");
       const alertsData = await alertsResponse.json();
-      
+
       // Fetch events
       const eventsResponse = await authFetch("/api/events");
       const eventsData = await eventsResponse.json();
-      
+
       // Fetch stats
       const statsResponse = await authFetch("/api/events/stats");
       const statsData = await statsResponse.json();
@@ -48,9 +48,9 @@ export default function Alerts() {
       setAlerts(alertsData.alerts || []);
       setEvents(eventsData.events || []);
       setStats(statsData.stats || []);
-      
+
     } catch (err) {
-      console.error("❌ Error fetching alerts data:", err);
+      console.error(" Error fetching alerts data:", err);
     } finally {
       setLoading(false);
     }
@@ -62,11 +62,11 @@ export default function Alerts() {
       await authFetch(`/api/events/${eventId}/resolve`, {
         method: 'PATCH'
       });
-      
+
       // Refresh data
       fetchData();
     } catch (err) {
-      console.error("❌ Error resolving alert:", err);
+      console.error(" Error resolving alert:", err);
     }
   };
 
@@ -158,30 +158,30 @@ export default function Alerts() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            🚨 System Alerts & Events
+             System Alerts & Events
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Monitor system health and ecosystem events in real-time
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowResolved(!showResolved)}
             className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-              showResolved 
-                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' 
+              showResolved
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                 : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
             }`}
           >
             {showResolved ? <Eye className="w-4 h-4 mr-1" /> : <EyeOff className="w-4 h-4 mr-1" />}
             {showResolved ? 'Hide Resolved' : 'Show Resolved'}
           </button>
-          <button 
+          <button
             onClick={fetchData}
             className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors"
           >
-            🔄 Refresh
+             Refresh
           </button>
         </div>
       </div>
@@ -215,7 +215,7 @@ export default function Alerts() {
       {/* Statistics */}
       {stats && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700"
@@ -271,7 +271,7 @@ export default function Alerts() {
             <Filter className="w-4 h-4 text-gray-500" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filters:</span>
           </div>
-          
+
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -309,7 +309,7 @@ export default function Alerts() {
           <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700">
             <CheckCircle className="w-16 h-16 mx-auto text-green-500 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-              All Clear! 🎉
+              All Clear!
             </h3>
             <p className="text-gray-600 dark:text-gray-400">
               No alerts matching your current filters. System is running smoothly.
@@ -333,7 +333,7 @@ export default function Alerts() {
                       {getAlertIcon(event.severity)}
                       {getCategoryIcon(event.category)}
                     </div>
-                    
+
                     <div className="flex-1">
                       <p className="font-medium">{event.message}</p>
                       <div className="flex items-center gap-4 mt-2 text-xs opacity-75">
@@ -354,7 +354,7 @@ export default function Alerts() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {!event.resolved && event.severity !== 'info' && (
                     <button
                       onClick={() => resolveAlert(event._id)}
@@ -364,10 +364,10 @@ export default function Alerts() {
                       <X className="w-4 h-4" />
                     </button>
                   )}
-                  
+
                   {event.resolved && (
                     <div className="ml-2 text-xs text-green-600 dark:text-green-400 font-medium">
-                      ✓ Resolved
+                       Resolved
                     </div>
                   )}
                 </div>

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { useAuth } from "../context/AuthContext";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { AlertCircle, CheckCircle2, Leaf, Lock, User } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const { login, signup, user, loading: authLoading } = useAuth();
@@ -13,19 +14,22 @@ export default function Login() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // ✅ Redirect if user is already logged in
   useEffect(() => {
     if (user && !authLoading) {
       navigate("/", { replace: true });
     }
   }, [user, authLoading, navigate]);
 
-  // ✅ Handle form submission with new API
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
     if (!username.trim() || !password.trim()) {
-      setError("Please fill in all fields");
+      setError("Username and password are required.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
 
@@ -34,228 +38,182 @@ export default function Login() {
     setSuccess("");
 
     try {
+      const result = isSignup
+        ? await signup(username.trim(), password)
+        : await login(username.trim(), password);
+
+      if (!result.success) {
+        setError(result.error || "Authentication failed.");
+        return;
+      }
+
       if (isSignup) {
-        const result = await signup(username.trim(), password);
-        
-        if (result.success) {
-          setSuccess(result.message || "Account created successfully! Please log in.");
-          setIsSignup(false);
-          setUsername("");
-          setPassword("");
-        } else {
-          setError(result.error || "Signup failed");
-        }
+        setSuccess("Account created. You can sign in now.");
+        setIsSignup(false);
+        setPassword("");
       } else {
-        const result = await login(username.trim(), password);
-        
-        if (result.success) {
-          setSuccess("Login successful! Redirecting...");
-          // Navigation will happen via useEffect when user state updates
-        } else {
-          setError(result.error || "Login failed");
-        }
+        setSuccess("Signed in successfully. Redirecting...");
       }
     } catch (err) {
-      setError(err.message || "Something went wrong");
+      setError(err.message || "Authentication failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Clear messages when switching between login/signup
   const toggleMode = () => {
-    setIsSignup(!isSignup);
+    setIsSignup((current) => !current);
     setError("");
     setSuccess("");
-    setUsername("");
     setPassword("");
   };
 
-  // ✅ Show loading if auth is being checked
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 dark:from-gray-900 dark:via-gray-950 dark:to-black">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Checking authentication...</p>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-600 border-t-cyan-400" />
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-100 via-gray-200 to-gray-300 dark:from-gray-900 dark:via-gray-950 dark:to-black relative overflow-hidden">
-      {/* ✅ Enhanced background animations */}
-      <motion.div
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1.2, opacity: 0.1 }}
-        transition={{ duration: 4, repeat: Infinity, repeatType: "mirror" }}
-        className="absolute w-96 h-96 bg-cyan-500 rounded-full blur-3xl"
-        style={{ top: "10%", left: "15%" }}
-      />
-      <motion.div
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1.5, opacity: 0.1 }}
-        transition={{ duration: 6, repeat: Infinity, repeatType: "mirror" }}
-        className="absolute w-[28rem] h-[28rem] bg-blue-500 rounded-full blur-3xl"
-        style={{ bottom: "10%", right: "10%" }}
-      />
-
-      <motion.div
-        key={isSignup ? "signup" : "login"}
-        initial={{ opacity: 0, y: 50, rotateX: 15 }}
-        animate={{ opacity: 1, y: 0, rotateX: 0 }}
-        exit={{ opacity: 0, y: -50, rotateX: -15 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="relative z-10 w-full max-w-md"
-      >
-        <div className="p-8 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-300 dark:border-gray-700">
-          {/* ✅ Enhanced header */}
-          <div className="text-center mb-6">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-            >
-              <span className="text-2xl">🌿</span>
-            </motion.div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Ecosystem Simulator
-            </h1>
-            <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300">
-              {isSignup ? "✨ Create Your Account" : "👋 Welcome Back"}
-            </h2>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="hidden bg-[radial-gradient(circle_at_20%_20%,rgba(20,184,166,0.22),transparent_28%),linear-gradient(135deg,#0f172a,#111827_48%,#020617)] p-12 lg:flex lg:flex-col lg:justify-between">
+          <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-400/15 ring-1 ring-cyan-300/30">
+              <Leaf className="h-5 w-5" />
+            </div>
+            Adaptive Ecosystem Simulator
           </div>
 
-          {/* ✅ Enhanced error/success messages */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 mb-4 text-sm text-red-800 bg-red-100 dark:bg-red-900/50 dark:text-red-200 rounded-lg border border-red-300 dark:border-red-700"
-            >
-              <div className="flex items-center">
-                <span className="mr-2">❌</span>
-                {error}
-              </div>
-            </motion.div>
-          )}
+          <div className="max-w-2xl">
+            <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-cyan-200">
+              Distributed simulation platform
+            </p>
+            <h1 className="text-5xl font-bold leading-tight text-white">
+              Production-grade ecosystem intelligence for simulation, monitoring, and prediction.
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">
+              Secure access to real-time dashboards, ML predictions, operational alerts, and simulation reports.
+            </p>
+          </div>
 
-          {success && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 mb-4 text-sm text-green-800 bg-green-100 dark:bg-green-900/50 dark:text-green-200 rounded-lg border border-green-300 dark:border-green-700"
-            >
-              <div className="flex items-center">
-                <span className="mr-2">✅</span>
-                {success}
-              </div>
-            </motion.div>
-          )}
+          <div className="grid grid-cols-3 gap-4 text-sm text-slate-300">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="font-semibold text-white">Realtime</p>
+              <p className="mt-1">Socket.IO telemetry</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="font-semibold text-white">Secure</p>
+              <p className="mt-1">JWT protected APIs</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="font-semibold text-white">AI Ready</p>
+              <p className="mt-1">Python ML service</p>
+            </div>
+          </div>
+        </section>
 
-          {/* ✅ Enhanced form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Username
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white bg-white/80 dark:bg-gray-800/80 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-                required
-                disabled={loading}
-              />
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white bg-white/80 dark:bg-gray-800/80 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
-                required
-                disabled={loading}
-                minLength="6"
-              />
-            </motion.div>
-
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="submit"
-              disabled={loading || !username.trim() || !password.trim()}
-              className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-semibold rounded-lg shadow-lg focus:outline-none focus:ring-4 focus:ring-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-2"></div>
-                  Please wait...
-                </>
-              ) : (
-                <>
-                  {isSignup ? (
-                    <>
-                      <span className="mr-2">🚀</span>
-                      Create Account
-                    </>
-                  ) : (
-                    <>
-                      <span className="mr-2">🔓</span>
-                      Sign In
-                    </>
-                  )}
-                </>
-              )}
-            </motion.button>
-          </form>
-
-          {/* ✅ Enhanced mode toggle */}
+        <main className="flex items-center justify-center px-6 py-12">
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-6 text-center"
+            key={isSignup ? "signup" : "login"}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="w-full max-w-md"
           >
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-600" />
+            <div className="mb-8 flex items-center gap-3 lg:hidden">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500">
+                <Leaf className="h-5 w-5 text-white" />
               </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white dark:bg-gray-900 text-gray-500">or</span>
+              <span className="font-semibold">Adaptive Ecosystem Simulator</span>
+            </div>
+
+            <div className="rounded-lg border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-black/30">
+              <div className="mb-8">
+                <p className="text-sm font-medium text-cyan-300">
+                  {isSignup ? "Create workspace access" : "Sign in to your workspace"}
+                </p>
+                <h2 className="mt-2 text-3xl font-bold text-white">
+                  {isSignup ? "Create account" : "Welcome back"}
+                </h2>
+              </div>
+
+              {error && (
+                <div className="mb-4 flex gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {success && (
+                <div className="mb-4 flex gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{success}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-300">Username</span>
+                  <div className="flex items-center rounded-lg border border-slate-700 bg-slate-950 px-3 focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-400/20">
+                    <User className="h-4 w-4 text-slate-500" />
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      placeholder="Enter username"
+                      className="w-full bg-transparent px-3 py-3 text-slate-100 outline-none placeholder:text-slate-500"
+                      autoComplete="username"
+                      disabled={loading}
+                      required
+                    />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-slate-300">Password</span>
+                  <div className="flex items-center rounded-lg border border-slate-700 bg-slate-950 px-3 focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-400/20">
+                    <Lock className="h-4 w-4 text-slate-500" />
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="Minimum 8 characters"
+                      className="w-full bg-transparent px-3 py-3 text-slate-100 outline-none placeholder:text-slate-500"
+                      autoComplete={isSignup ? "new-password" : "current-password"}
+                      disabled={loading}
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={loading || !username.trim() || password.length < 8}
+                  className="flex w-full items-center justify-center rounded-lg bg-cyan-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading ? "Please wait..." : isSignup ? "Create account" : "Sign in"}
+                </button>
+              </form>
+
+              <div className="mt-6 border-t border-slate-800 pt-6 text-center text-sm text-slate-400">
+                {isSignup ? "Already have an account?" : "Need an account?"}
+                <button
+                  type="button"
+                  onClick={toggleMode}
+                  disabled={loading}
+                  className="ml-2 font-semibold text-cyan-300 hover:text-cyan-200"
+                >
+                  {isSignup ? "Sign in" : "Create one"}
+                </button>
               </div>
             </div>
-            
-            <p className="mt-4 text-gray-600 dark:text-gray-400">
-              {isSignup ? "Already have an account?" : "New to Ecosystem Simulator?"}{" "}
-              <button
-                type="button"
-                onClick={toggleMode}
-                disabled={loading}
-                className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 font-semibold underline transition-colors disabled:opacity-50"
-              >
-                {isSignup ? "Sign in here" : "Create an account"}
-              </button>
-            </p>
           </motion.div>
-        </div>
-      </motion.div>
+        </main>
+      </div>
     </div>
   );
 }

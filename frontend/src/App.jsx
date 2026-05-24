@@ -1,13 +1,13 @@
 import React, { Suspense, lazy } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertTriangle, ArrowLeft, Home, RefreshCw } from "lucide-react";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { SimulationProvider } from "./context/SimulationContext";
 import { DashboardProvider } from "./context/DashboardContext";
-import { motion, AnimatePresence } from "framer-motion";
 
-// ✅ Lazy load pages for better performance
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Simulation = lazy(() => import("./pages/Simulation"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -15,69 +15,41 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Logbook = lazy(() => import("./pages/LogBook"));
 const Monitoring = lazy(() => import("./pages/Monitoring"));
 const Alerts = lazy(() => import("./pages/Alerts"));
-// ✅ New Day 27 - AI Predictions page
 const Predictions = lazy(() => import("./pages/Predictions"));
 
-// ✅ Enhanced Loading Component
 const LoadingSpinner = ({ message = "Loading..." }) => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="text-center"
-    >
-      <div className="relative">
-        <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
-        <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-b-green-500 rounded-full animate-spin mx-auto" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
-      </div>
-      <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">
-        🌿 Ecosystem Simulator
-      </h3>
-      <p className="text-gray-500 dark:text-gray-400 animate-pulse">
-        {message}
-      </p>
-    </motion.div>
+  <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-blue-200 border-t-blue-500" />
+    <h3 className="mb-2 text-lg font-semibold text-gray-700 dark:text-gray-300">
+      Ecosystem Simulator
+    </h3>
+    <p className="text-gray-500 dark:text-gray-400">{message}</p>
   </div>
 );
 
-// ✅ Enhanced ProtectedRoute with better UX
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <LoadingSpinner message="Checking authentication..." />;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (loading) return <LoadingSpinner message="Checking authentication..." />;
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 }
 
-// ✅ Public Route Component (redirects to dashboard if already logged in)
 function PublicRoute({ children }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <LoadingSpinner message="Checking authentication..." />;
-  }
-
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
-
+  if (loading) return <LoadingSpinner message="Checking authentication..." />;
+  if (user) return <Navigate to="/" replace />;
   return children;
 }
 
-// ✅ Enhanced Page Wrapper with animations
 function PageWrapper({ children }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
+      exit={{ opacity: 0, y: -16 }}
+      transition={{ duration: 0.25 }}
       className="h-full"
     >
       {children}
@@ -85,17 +57,53 @@ function PageWrapper({ children }) {
   );
 }
 
-// ✅ Suspense Fallback Component
 const SuspenseFallback = () => (
   <div className="flex items-center justify-center p-8">
     <div className="text-center">
-      <div className="w-8 h-8 border-3 border-blue-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-3"></div>
+      <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-500" />
       <p className="text-gray-600 dark:text-gray-400">Loading page...</p>
     </div>
   </div>
 );
 
-// ✅ Main App Content Component
+const NotFound = () => (
+  <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-6 dark:bg-gray-900">
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-md text-center"
+    >
+      <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-lg bg-slate-800">
+        <AlertTriangle className="h-9 w-9 text-cyan-300" />
+      </div>
+      <h1 className="mb-4 text-4xl font-bold text-gray-800 dark:text-gray-100">
+        404 - Page Not Found
+      </h1>
+      <p className="mb-8 text-gray-600 dark:text-gray-400">
+        The page you are looking for does not exist or has moved.
+      </p>
+      <div className="flex flex-col justify-center gap-4 sm:flex-row">
+        <button
+          onClick={() => window.history.back()}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-600 px-6 py-3 text-white transition-colors hover:bg-gray-700"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Go Back
+        </button>
+        <button
+          onClick={() => {
+            window.location.href = "/";
+          }}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-white transition-colors hover:bg-blue-700"
+        >
+          <Home className="h-4 w-4" />
+          Home
+        </button>
+      </div>
+    </motion.div>
+  </div>
+);
+
 function AppContent() {
   const location = useLocation();
 
@@ -104,7 +112,6 @@ function AppContent() {
       <AnimatePresence mode="wait">
         <Suspense fallback={<SuspenseFallback />}>
           <Routes location={location} key={location.pathname}>
-            {/* ✅ Protected Routes */}
             <Route
               path="/"
               element={
@@ -115,10 +122,7 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/dashboard"
-              element={<Navigate to="/" replace />}
-            />
+            <Route path="/dashboard" element={<Navigate to="/" replace />} />
             <Route
               path="/simulation"
               element={
@@ -179,7 +183,6 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-            {/* ✅ NEW Day 27 - AI Predictions Page */}
             <Route
               path="/predictions"
               element={
@@ -190,8 +193,6 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-
-            {/* ✅ Public Routes */}
             <Route
               path="/login"
               element={
@@ -202,90 +203,7 @@ function AppContent() {
                 </PublicRoute>
               }
             />
-
-            {/* ✅ Enhanced 404 page */}
-            <Route
-              path="*"
-              element={
-                <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-                  <motion.div
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-center"
-                  >
-                    <div className="w-24 h-24 bg-gradient-to-br from-red-400 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <span className="text-3xl">🔍</span>
-                    </div>
-                    <h1 className="text-4xl font-bold text-gray-800 dark:text-gray-100 mb-4">
-                      404 - Page Not Found
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md">
-                      The page you're looking for doesn't exist or has been moved to a different location.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => window.history.back()}
-                        className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                      >
-                        ← Go Back
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => window.location.href = '/'}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        🏠 Home
-                      </motion.button>
-                    </div>
-                    
-                    {/* Quick Navigation */}
-                    <div className="mt-8 pt-8 border-t border-gray-300 dark:border-gray-600">
-                      <p className="text-gray-500 dark:text-gray-400 mb-4">Or explore these sections:</p>
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 max-w-2xl mx-auto">
-                        <a 
-                          href="/" 
-                          className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow text-center"
-                        >
-                          <div className="text-2xl mb-1">📊</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Dashboard</div>
-                        </a>
-                        <a 
-                          href="/simulation" 
-                          className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow text-center"
-                        >
-                          <div className="text-2xl mb-1">🌱</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Simulation</div>
-                        </a>
-                        <a 
-                          href="/predictions" 
-                          className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow text-center"
-                        >
-                          <div className="text-2xl mb-1">🤖</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">AI Predictions</div>
-                        </a>
-                        <a 
-                          href="/monitoring" 
-                          className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow text-center"
-                        >
-                          <div className="text-2xl mb-1">📈</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Monitoring</div>
-                        </a>
-                        <a 
-                          href="/alerts" 
-                          className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow text-center"
-                        >
-                          <div className="text-2xl mb-1">🚨</div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400">Alerts</div>
-                        </a>
-                      </div>
-                    </div>
-                  </motion.div>
-                </div>
-              }
-            />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </AnimatePresence>
@@ -293,46 +211,42 @@ function AppContent() {
   );
 }
 
-// ✅ Error Boundary Component
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+  static getDerivedStateFromError() {
+    return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Application Error:', error, errorInfo);
+    console.error("Application Error:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center max-w-md"
-          >
-            <div className="w-24 h-24 bg-gradient-to-br from-red-500 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="text-3xl">⚠️</span>
+        <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-6 dark:bg-gray-900">
+          <div className="max-w-md text-center">
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-lg bg-red-500/10">
+              <AlertTriangle className="h-9 w-9 text-red-500" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">
+            <h1 className="mb-4 text-2xl font-bold text-gray-800 dark:text-gray-100">
               Something went wrong
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              The application encountered an unexpected error. Please refresh the page or try again later.
+            <p className="mb-6 text-gray-600 dark:text-gray-400">
+              The application encountered an unexpected error. Please refresh the page or try again.
             </p>
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-white transition-colors hover:bg-blue-700"
             >
-              🔄 Refresh Page
+              <RefreshCw className="h-4 w-4" />
+              Refresh Page
             </button>
-          </motion.div>
+          </div>
         </div>
       );
     }
@@ -341,11 +255,10 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// ✅ Main App Component with enhanced error boundary
 export default function App() {
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      <div className="min-h-screen bg-gray-50 transition-colors duration-300 dark:bg-gray-900">
         <AuthProvider>
           <SimulationProvider>
             <DashboardProvider>

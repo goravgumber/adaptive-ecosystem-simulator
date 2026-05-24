@@ -16,27 +16,26 @@ export const DashboardProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // 🔄 Fetch dashboard data
   const fetchDashboard = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch("http://localhost:5000/api/dashboard");
+      const res = await authFetch("/dashboard");
       if (!res.ok) throw new Error("Failed to fetch dashboard");
       const data = await res.json();
-      setStats(data.stats || {});
-      setTrend(data.trend || []);
-      setAlerts(data.alerts || []); // ⬅️ Day 26: alerts integration
+      const payload = data.data || data;
+      setStats(payload.stats || {});
+      setTrend(payload.trend || []);
+      setAlerts(payload.alerts || []);
     } catch (err) {
-      console.error("❌ Dashboard fetch error:", err);
+      console.error("Dashboard fetch error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [token, authFetch]);
 
-  // ⏱ Auto-refresh every 5s
   useEffect(() => {
     if (token) {
       fetchDashboard();
