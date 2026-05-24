@@ -1,603 +1,460 @@
-import React, { useEffect, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import { motion, AnimatePresence } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   Brain,
-  TrendingUp,
-  AlertTriangle,
-  Target,
-  BarChart3,
-  Zap,
-  Clock,
-  CheckCircle,
-  XCircle,
   RefreshCw,
+  AlertTriangle,
+  TrendingUp,
   Lightbulb,
-  Activity
+  ChevronRight,
+  XCircle,
 } from "lucide-react";
 import {
   ResponsiveContainer,
-  LineChart,
+  LineChart as RechartsLineChart,
   Line,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
-  RadialBarChart,
-  RadialBar,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar
 } from "recharts";
+import { simAPI } from "../services/api";
+import Badge from "../components/ui/Badge";
+import Card from "../components/ui/Card";
+import { formatPop } from "../utils/format";
 
-const COLORS = {
-  critical: '#DC2626',
-  high: '#EA580C',
-  moderate: '#D97706',
-  low: '#65A30D',
-  minimal: '#16A34A'
+const RISK_COLORS = {
+  critical: "#EF4444",
+  high: "#F59E0B",
+  moderate: "#F59E0B",
+  low: "#22C55E",
+  minimal: "#22C55E",
 };
+
+const SPECIES_CONFIG = [
+  { key: "plants", label: "Plants", color: "#4ADE80" },
+  { key: "herbivores", label: "Herbivores", color: "#60A5FA" },
+  { key: "carnivores", label: "Carnivores", color: "#F87171" },
+];
+
+function Gauge({ pct, color, size = 160 }) {
+  const stroke = 14;
+  const r = (size - stroke) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - Math.min(pct, 100) / 100);
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke="#1C2E1C"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          className="transition-all duration-700"
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-text-muted text-[10px] font-mono uppercase tracking-wider">
+          Risk
+        </span>
+        <span
+          className="text-2xl font-bold font-mono"
+          style={{ color }}
+        >
+          {pct}%
+        </span>
+        <span className="text-text-muted text-[10px] font-mono capitalize">
+          {pct <= 20 ? "low" : pct <= 40 ? "moderate" : pct <= 70 ? "high" : "critical"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ForecastTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-elevated border border-border rounded-lg p-3 shadow-card font-mono text-xs">
+      <p className="text-text-muted mb-1">{label}</p>
+      {payload.map((p) => (
+        <p key={p.dataKey} style={{ color: p.color }}>
+          {p.name}: {formatPop(p.value)}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function Predictions() {
   const { authFetch } = useAuth();
-  const [predictions, setPredictions] = useState({
-    collapse: null,
-    forecast: null,
-    recommendations: [],
-    patterns: null
-  });
-  const [loading, setLoading] = useState({
-    collapse: false,
-    forecast: false,
-    recommendations: false,
-    patterns: false
-  });
-  const [stats, setStats] = useState(null);
+  const [simRunning, setSimRunning] = useState(null);
+  const [collapseRisk, setCollapseRisk] = useState(null);
+  const [forecast, setForecast] = useState(null);
+  const [recommendations, setRecommendations] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [error, setError] = useState(null);
+  const intervalRef = useRef(null);
 
-  // Fetch all prediction types
-  const fetchAllPredictions = async () => {
+  const fetchData = async () => {
     try {
-      setLoading({ collapse: true, forecast: true, recommendations: true, patterns: true });
+      setLoading(true);
       setError(null);
 
-      // Fetch predictions in parallel
-      const [collapseRes, forecastRes, recommendationsRes, patternsRes] = await Promise.allSettled([
-        authFetch("/api/predictions/collapse", { method: "POST", body: JSON.stringify({ steps: 5 }) }),
-        authFetch("/api/predictions/forecast", { method: "POST", body: JSON.stringify({ steps: 7 }) }),
-        authFetch("/api/predictions/recommendations", { method: "POST" }),
-        authFetch("/api/predictions/patterns", { method: "POST" })
+      const statusRes = await simAPI.status();
+      const running = statusRes.data?.isRunning || false;
+      setSimRunning(running);
+
+      if (!running) {
+        setCollapseRisk(null);
+        setForecast(null);
+        setRecommendations([]);
+        return;
+      }
+
+      const [colRes, foreRes, recRes] = await Promise.allSettled([
+        authFetch("/api/predictions/collapse", {
+          method: "POST",
+          body: JSON.stringify({ steps: 5 }),
+        }),
+        authFetch("/api/predictions/forecast", {
+          method: "POST",
+          body: JSON.stringify({ steps: 7 }),
+        }),
+        authFetch("/api/predictions/recommendations", {
+          method: "POST",
+        }),
       ]);
 
-      // Process results safely
-      if (collapseRes.status === 'fulfilled' && collapseRes.value?.ok) {
-        try {
-          const data = await collapseRes.value.json();
-          setPredictions(prev => ({ ...prev, collapse: data.prediction }));
-        } catch (err) {
-          console.error("Error parsing collapse data:", err);
-        }
+      if (colRes.status === "fulfilled" && colRes.value?.ok) {
+        const d = await colRes.value.json();
+        setCollapseRisk(d.prediction || d);
       }
-
-      if (forecastRes.status === 'fulfilled' && forecastRes.value?.ok) {
-        try {
-          const data = await forecastRes.value.json();
-          setPredictions(prev => ({ ...prev, forecast: data.forecast }));
-        } catch (err) {
-          console.error("Error parsing forecast data:", err);
-        }
+      if (foreRes.status === "fulfilled" && foreRes.value?.ok) {
+        const d = await foreRes.value.json();
+        setForecast(d.forecast || d);
       }
-
-      if (recommendationsRes.status === 'fulfilled' && recommendationsRes.value?.ok) {
-        try {
-          const data = await recommendationsRes.value.json();
-          setPredictions(prev => ({ ...prev, recommendations: data.recommendations || [] }));
-        } catch (err) {
-          console.error("Error parsing recommendations data:", err);
-        }
+      if (recRes.status === "fulfilled" && recRes.value?.ok) {
+        const d = await recRes.value.json();
+        setRecommendations(d.recommendations || []);
       }
-
-      if (patternsRes.status === 'fulfilled' && patternsRes.value?.ok) {
-        try {
-          const data = await patternsRes.value.json();
-          setPredictions(prev => ({ ...prev, patterns: data.patterns }));
-        } catch (err) {
-          console.error("Error parsing patterns data:", err);
-        }
-      }
-
       setLastUpdate(new Date());
-
-    } catch (error) {
-      console.error(" Error fetching predictions:", error);
-      setError("Failed to fetch predictions");
+    } catch (err) {
+      console.error("Predictions error:", err);
+      setError("Failed to load predictions");
     } finally {
-      setLoading({ collapse: false, forecast: false, recommendations: false, patterns: false });
-    }
-  };
-
-  // Fetch prediction statistics
-  const fetchStats = async () => {
-    try {
-      const response = await authFetch("/api/predictions/stats");
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data.stats);
-      }
-    } catch (error) {
-      console.error(" Error fetching prediction stats:", error);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAllPredictions();
-    fetchStats();
+    fetchData();
+    intervalRef.current = setInterval(fetchData, 10000);
+    return () => clearInterval(intervalRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Get risk color
-  const getRiskColor = (riskLevel) => {
-    return COLORS[riskLevel] || COLORS.moderate;
-  };
+  const riskLevel = collapseRisk?.riskLevel || "low";
+  const riskPct = Math.round((collapseRisk?.collapseRisk || 0) * 100);
+  const riskColor = RISK_COLORS[riskLevel] || RISK_COLORS.low;
+  const confidence = collapseRisk?.confidence
+    ? Math.round(collapseRisk.confidence * 100)
+    : 0;
+  const horizon = collapseRisk?.stepsAhead || 5;
 
-  // Format confidence percentage
-  const formatConfidence = (confidence) => {
-    return Math.round((confidence || 0) * 100);
-  };
-
-  // Safe forecast data preparation - NO AreaChart used!
-  const prepareForecastData = (forecastData) => {
-    try {
-      if (!forecastData?.predictions || !Array.isArray(forecastData.predictions)) {
-        return [];
-      }
-
-      return forecastData.predictions.map((point, index) => ({
-        step: point.step || index,
-        plants: Math.max(0, Number(point.plants) || 0),
-        herbivores: Math.max(0, Number(point.herbivores) || 0),
-        carnivores: Math.max(0, Number(point.carnivores) || 0)
-      })).filter(point =>
-        typeof point.step === 'number' &&
-        !isNaN(point.step) &&
-        !isNaN(point.plants) &&
-        !isNaN(point.herbivores) &&
-        !isNaN(point.carnivores)
-      );
-    } catch (error) {
-      console.error("Error preparing forecast data:", error);
-      return [];
+  const chartData = (() => {
+    if (!forecast?.predictions?.length) return [];
+    const hist = forecast.historical || [];
+    const hasHist = hist.length > 0;
+    const result = [];
+    for (let i = 0; i < hist.length; i++) {
+      result.push({
+        step: `H${i + 1}`,
+        plants: Math.round(hist[i].plants || 0),
+        herbivores: Math.round(hist[i].herbivores || 0),
+        carnivores: Math.round(hist[i].carnivores || 0),
+        _forecast: false,
+        _boundary: false,
+      });
     }
-  };
-
-  // Safe tooltip
-  const SafeTooltip = ({ active, payload, label }) => {
-    try {
-      if (!active || !payload || !Array.isArray(payload) || payload.length === 0) {
-        return null;
-      }
-
-      const data = payload[0]?.payload;
-      if (!data) return null;
-
-      return (
-        <div className="bg-white dark:bg-gray-800 p-3 border rounded shadow-lg">
-          <p className="font-medium">Step {label || 0}</p>
-          <p className="text-green-600">Plants: {data.plants || 0}</p>
-          <p className="text-orange-600">Herbivores: {data.herbivores || 0}</p>
-          <p className="text-red-600">Carnivores: {data.carnivores || 0}</p>
-        </div>
-      );
-    } catch (error) {
-      console.error("Error in tooltip:", error);
-      return null;
+    if (hasHist && forecast.predictions.length > 0) {
+      const last = result[result.length - 1];
+      result.push({
+        step: "",
+        plants: last.plants,
+        herbivores: last.herbivores,
+        carnivores: last.carnivores,
+        _forecast: false,
+        _boundary: true,
+      });
     }
-  };
+    for (let i = 0; i < forecast.predictions.length; i++) {
+      const p = forecast.predictions[i];
+      result.push({
+        step: `${i + 1}`,
+        plants: Math.round(p.plants || 0),
+        herbivores: Math.round(p.herbivores || 0),
+        carnivores: Math.round(p.carnivores || 0),
+        _forecast: true,
+        _boundary: false,
+      });
+    }
+    return result;
+  })();
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-3">
-            <Brain className="w-8 h-8 text-blue-500" />
-            AI Predictions
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Machine learning powered ecosystem analysis and forecasting
-          </p>
-        </div>
-
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Last updated: {lastUpdate.toLocaleTimeString()}
+          <Brain className="w-7 h-7 text-accent" />
+          <div>
+            <h1 className="text-xl font-semibold text-text-primary font-mono">
+              AI Predictions
+            </h1>
+            <p className="text-text-muted text-xs font-mono">
+              Last updated: {lastUpdate.toLocaleTimeString()}
+            </p>
           </div>
-          <button
-            onClick={fetchAllPredictions}
-            disabled={Object.values(loading).some(l => l)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${Object.values(loading).some(l => l) ? 'animate-spin' : ''}`} />
-            Refresh Predictions
-          </button>
         </div>
+        <button
+          onClick={fetchData}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-dim text-base font-medium rounded-lg transition-all duration-150 disabled:opacity-40"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </button>
       </div>
 
-      {/* Error Display */}
       {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4"
-        >
-          <div className="flex items-center gap-2">
-            <XCircle className="w-5 h-5 text-red-500" />
-            <p className="text-red-700 dark:text-red-300">{error}</p>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Stats Overview */}
-      {stats && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-        >
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Predictions</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {stats.summary?.totalPredictions || 0}
-                </p>
-              </div>
-              <BarChart3 className="w-8 h-8 text-blue-500" />
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">High Confidence</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {stats.summary?.highConfidencePredictions || 0}
-                </p>
-              </div>
-              <Target className="w-8 h-8 text-green-500" />
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Accuracy Rate</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {Math.round((stats.summary?.accuracyRate || 0) * 100)}%
-                </p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-emerald-500" />
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Time Range</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {stats.summary?.timeRange || 'N/A'}
-                </p>
-              </div>
-              <Clock className="w-8 h-8 text-purple-500" />
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Main Predictions Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Collapse Risk Prediction */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              Collapse Risk Prediction
-            </h3>
-            {loading.collapse && <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>}
-          </div>
-
-          {predictions.collapse ? (
-            <div className="space-y-4">
-              {/* Risk Gauge */}
-              <div className="flex items-center justify-center">
-                <div className="relative w-48 h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadialBarChart
-                      cx="50%"
-                      cy="50%"
-                      innerRadius="60%"
-                      outerRadius="90%"
-                      data={[{
-                        name: 'Risk',
-                        value: (predictions.collapse.collapseRisk || 0) * 100,
-                        fill: getRiskColor(predictions.collapse.riskLevel)
-                      }]}
-                      startAngle={90}
-                      endAngle={450}
-                    >
-                      <RadialBar dataKey="value" fill={getRiskColor(predictions.collapse.riskLevel)} />
-                    </RadialBarChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-3xl font-bold" style={{ color: getRiskColor(predictions.collapse.riskLevel) }}>
-                      {Math.round((predictions.collapse.collapseRisk || 0) * 100)}%
-                    </div>
-                    <div className="text-sm text-gray-500 capitalize">
-                      {predictions.collapse.riskLevel || 'Unknown'} Risk
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Risk Details */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Confidence</p>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">
-                    {formatConfidence(predictions.collapse.confidence)}%
-                  </p>
-                </div>
-                <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Steps Ahead</p>
-                  <p className="font-semibold text-gray-900 dark:text-gray-100">
-                    {predictions.collapse.stepsAhead || 5}
-                  </p>
-                </div>
-              </div>
-
-              {/* Risk Factors */}
-              {predictions.collapse.factors && Array.isArray(predictions.collapse.factors) && predictions.collapse.factors.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Risk Factors</h4>
-                  <div className="space-y-2">
-                    {predictions.collapse.factors.slice(0, 3).map((factor, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded">
-                        <span className="text-sm text-red-800 dark:text-red-200">{factor.factor || 'Unknown factor'}</span>
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          factor.impact === 'critical' ? 'bg-red-200 text-red-800' :
-                          factor.impact === 'high' ? 'bg-orange-200 text-orange-800' :
-                          'bg-yellow-200 text-yellow-800'
-                        }`}>
-                          {factor.impact || 'unknown'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center py-12 text-gray-500">
-              <div className="text-center">
-                <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No collapse prediction available</p>
-                <p className="text-sm">Need more simulation data</p>
-              </div>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Population Forecast - SAFE VERSION WITH LINE CHART ONLY */}
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-green-500" />
-              Population Forecast
-            </h3>
-            {loading.forecast && <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>}
-          </div>
-
-          {predictions.forecast?.predictions ? (
-            <div className="space-y-4">
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={prepareForecastData(predictions.forecast)}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="step" />
-                  <YAxis />
-                  <Tooltip content={<SafeTooltip />} />
-                  <Line type="monotone" dataKey="plants" stroke="#16A34A" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="herbivores" stroke="#EA580C" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="carnivores" stroke="#DC2626" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div className="text-center p-2 border border-green-200 dark:border-green-700 rounded">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mx-auto mb-1"></div>
-                  <p className="text-xs text-gray-500">Plants</p>
-                  <p className="font-semibold text-green-600">
-                    {predictions.forecast.predictions[predictions.forecast.predictions.length - 1]?.plants || 0}
-                  </p>
-                </div>
-                <div className="text-center p-2 border border-orange-200 dark:border-orange-700 rounded">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full mx-auto mb-1"></div>
-                  <p className="text-xs text-gray-500">Herbivores</p>
-                  <p className="font-semibold text-orange-600">
-                    {predictions.forecast.predictions[predictions.forecast.predictions.length - 1]?.herbivores || 0}
-                  </p>
-                </div>
-                <div className="text-center p-2 border border-red-200 dark:border-red-700 rounded">
-                  <div className="w-3 h-3 bg-red-500 rounded-full mx-auto mb-1"></div>
-                  <p className="text-xs text-gray-500">Carnivores</p>
-                  <p className="font-semibold text-red-600">
-                    {predictions.forecast.predictions[predictions.forecast.predictions.length - 1]?.carnivores || 0}
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-center">
-                <p className="text-sm text-gray-500">
-                  Confidence: <span className="font-semibold">{formatConfidence(predictions.forecast.confidence)}%</span>
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center py-12 text-gray-500">
-              <div className="text-center">
-                <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                <p>No forecast available</p>
-                <p className="text-sm">Need more simulation data</p>
-              </div>
-            </div>
-          )}
-        </motion.div>
-      </div>
-
-      {/* Smart Recommendations */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-yellow-500" />
-            Smart Recommendations
-          </h3>
-          {loading.recommendations && <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>}
+        <div className="flex items-center gap-2 bg-danger-muted border border-danger/30 rounded-lg p-3">
+          <XCircle className="w-4 h-4 text-danger shrink-0" />
+          <span className="text-danger text-sm">{error}</span>
         </div>
+      )}
 
-        {predictions.recommendations && Array.isArray(predictions.recommendations) && predictions.recommendations.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {predictions.recommendations.map((recommendation, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`p-4 rounded-lg border-l-4 ${
-                  recommendation.priority === 'high' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' :
-                  recommendation.priority === 'medium' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' :
-                  'border-green-500 bg-green-50 dark:bg-green-900/20'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                    {recommendation.description || 'No description'}
-                  </h4>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    recommendation.priority === 'high' ? 'bg-red-200 text-red-800' :
-                    recommendation.priority === 'medium' ? 'bg-yellow-200 text-yellow-800' :
-                    'bg-green-200 text-green-800'
-                  }`}>
-                    {recommendation.priority || 'unknown'}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  {recommendation.impact || 'No impact description'}
+      {/* Empty state — no simulation */}
+      {simRunning === false && !loading && (
+        <div className="flex flex-col items-center justify-center py-24 text-text-muted">
+          <Brain className="w-16 h-16 text-accent mb-4" />
+          <p className="text-text-primary font-medium mb-1">
+            No active simulation
+          </p>
+          <Link
+            to="/dashboard"
+            className="text-accent hover:underline text-sm inline-flex items-center gap-1"
+          >
+            Start a simulation <ChevronRight className="w-3 h-3" />
+          </Link>
+        </div>
+      )}
+
+      {simRunning && (
+        <>
+          {/* SECTION 1 — Collapse Risk */}
+          <Card padding="p-5">
+            <div className="flex items-start gap-6">
+              <Gauge pct={riskPct} color={riskColor} />
+              <div className="flex-1 min-w-0 space-y-3">
+                <p className="text-text-muted text-xs font-mono uppercase tracking-wider">
+                  Collapse Risk
                 </p>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-gray-500">
-                    Confidence: {formatConfidence(recommendation.confidence)}%
+                <p className="text-4xl font-bold font-mono text-text-primary">
+                  {riskPct}%
+                </p>
+                <div className="flex items-center gap-4 text-sm font-mono">
+                  <span className="text-text-secondary">Confidence</span>
+                  <span className="text-text-primary font-medium">
+                    {confidence}%
                   </span>
-                  <button className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded hover:bg-blue-200 transition-colors">
-                    Apply
-                  </button>
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center py-12 text-gray-500">
-            <div className="text-center">
-              <Lightbulb className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>No recommendations available</p>
-              <p className="text-sm">Ecosystem appears stable</p>
+                <div className="flex items-center gap-4 text-sm font-mono">
+                  <span className="text-text-secondary">Horizon</span>
+                  <span className="text-text-primary font-medium">
+                    {horizon} ticks
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-elevated rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${riskPct}%`,
+                      backgroundColor: riskColor,
+                    }}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-      </motion.div>
+          </Card>
 
-      {/* Ecosystem Patterns */}
-      {predictions.patterns && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-purple-500" />
-              Ecosystem Health Analysis
-            </h3>
-            {loading.patterns && <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Health Score */}
-            <div className="text-center">
-              <div className="w-24 h-24 mx-auto mb-3 relative">
+          {/* SECTION 2 — Population Forecast */}
+          <Card padding="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-accent" />
+                <span className="text-text-muted text-xs font-mono uppercase tracking-wider">
+                  7-Tick Forecast
+                </span>
+              </div>
+              <Badge variant="info">LSTM Model</Badge>
+            </div>
+            {chartData.length > 0 ? (
+              <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { value: (predictions.patterns.healthScore || 0) * 100, fill: '#16A34A' },
-                        { value: (1 - (predictions.patterns.healthScore || 0)) * 100, fill: '#E5E7EB' }
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={25}
-                      outerRadius={40}
-                      startAngle={90}
-                      endAngle={450}
-                      dataKey="value"
+                  <RechartsLineChart
+                    data={chartData}
+                    margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      stroke="#1C2E1C"
+                      strokeDasharray="3 3"
+                      vertical={false}
                     />
-                  </PieChart>
+                    <XAxis
+                      dataKey="step"
+                      stroke="#4D7A4D"
+                      tick={{
+                        fill: "#4D7A4D",
+                        fontSize: 11,
+                        fontFamily: "JetBrains Mono",
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      stroke="#4D7A4D"
+                      tick={{
+                        fill: "#4D7A4D",
+                        fontSize: 11,
+                        fontFamily: "JetBrains Mono",
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={formatPop}
+                    />
+                    <Tooltip content={<ForecastTooltip />} />
+                    {SPECIES_CONFIG.map((s) => (
+                      <Line
+                        key={s.key}
+                        type="monotone"
+                        dataKey={s.key}
+                        stroke={s.color}
+                        strokeWidth={2}
+                        dot={false}
+                        name={s.label}
+                        connectNulls
+                      />
+                    ))}
+                    {/* Forecast dashed overlay */}
+                    {SPECIES_CONFIG.map((s) => (
+                      <Line
+                        key={`forecast-${s.key}`}
+                        type="monotone"
+                        dataKey={s.key}
+                        stroke={s.color}
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        name={`${s.label} (forecast)`}
+                        connectNulls
+                        data={chartData.filter((d) => d._forecast || d._boundary)}
+                      />
+                    ))}
+                  </RechartsLineChart>
                 </ResponsiveContainer>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                    {Math.round((predictions.patterns.healthScore || 0) * 100)}%
-                  </span>
-                </div>
               </div>
-              <p className="text-sm text-gray-500">Health Score</p>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-text-muted">
+                <TrendingUp className="w-10 h-10 mb-2" />
+                <p className="text-sm">No forecast data available</p>
+              </div>
+            )}
+          </Card>
 
-            {/* Stability */}
-            <div className="text-center">
-              <div className={`inline-block px-4 py-2 rounded-full text-sm font-medium ${
-                predictions.patterns.stability === 'high' ? 'bg-green-100 text-green-800' :
-                predictions.patterns.stability === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
-                'bg-red-100 text-red-800'
-              }`}>
-                {predictions.patterns.stability || 'unknown'} stability
-              </div>
-              <p className="text-sm text-gray-500 mt-2">Ecosystem Stability</p>
+          {/* SECTION 3 — Smart Recommendations */}
+          <Card padding="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-text-muted text-xs font-mono uppercase tracking-wider">
+                Recommendations
+              </span>
+              <Badge variant="info">AI</Badge>
             </div>
-
-            {/* Additional Metrics */}
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Cycles Detected</span>
-                <span className="text-sm font-medium">{predictions.patterns.cycles?.length || 0}</span>
+            {recommendations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-text-muted">
+                <Lightbulb className="w-10 h-10 mb-2" />
+                <p className="text-sm">
+                  Ecosystem appears stable — no action needed
+                </p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Anomalies</span>
-                <span className="text-sm font-medium">{predictions.patterns.anomalies?.length || 0}</span>
+            ) : (
+              <div className="space-y-3">
+                {recommendations.map((rec, i) => {
+                  const sev = rec.severity || rec.priority || "info";
+                  const borderColor =
+                    sev === "critical" || sev === "high"
+                      ? "border-l-danger"
+                      : sev === "warning" || sev === "medium"
+                        ? "border-l-warning"
+                        : "border-l-accent";
+                  const badgeVar =
+                    sev === "critical" || sev === "high"
+                      ? "danger"
+                      : sev === "warning" || sev === "medium"
+                        ? "warning"
+                        : "success";
+                  return (
+                    <div
+                      key={i}
+                      className={`border-l-[3px] ${borderColor} bg-surface hover:bg-elevated transition rounded-lg p-4`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          {sev === "critical" || sev === "high" ? (
+                            <AlertTriangle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
+                          ) : sev === "warning" || sev === "medium" ? (
+                            <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+                          ) : (
+                            <Lightbulb className="w-5 h-5 text-accent shrink-0 mt-0.5" />
+                          )}
+                          <div>
+                            <p className="text-text-primary text-sm font-medium">
+                              {rec.description || rec.message || "Recommendation"}
+                            </p>
+                            {rec.impact && (
+                              <p className="text-text-muted text-xs mt-1">
+                                {rec.impact}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant={badgeVar} className="shrink-0">
+                          {sev}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-        </motion.div>
+            )}
+          </Card>
+        </>
       )}
     </div>
   );

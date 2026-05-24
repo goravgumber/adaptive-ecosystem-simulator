@@ -1,143 +1,250 @@
-import React, { useMemo, useState } from "react";
-import { useSimulation } from "../context/SimulationContext";
-import { motion, AnimatePresence } from "framer-motion";
-import { Download, Search, Pin } from "lucide-react"; 
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useAuth } from "../context/AuthContext";
+import Card from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Skeleton from "../components/ui/Skeleton";
+
+const severityColors = {
+  info: "#22C55E",
+  warning: "#F59E0B",
+  error: "#EF4444",
+};
+
+const severityFilters = ["all", "info", "warning", "error"];
+
+function severityDot(color) {
+  return (
+    <span
+      className="inline-block w-2 h-2 rounded-full shrink-0 mt-1"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
 
 export default function LogBook() {
-  const { logs, exportLogs, refreshHistory } = useSimulation();
+  const { authFetch } = useAuth();
+  const [logs, setLogs] = useState([]);
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
   const [pinned, setPinned] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  const filtered = useMemo(() => {
-    return logs.filter((l) => {
-      const passSeverity = severity === "all" ? true : l.severity === severity || l.type === severity;
-      const text = `${l.message} ${l.step || ""}`.toLowerCase();
-      const passQuery = text.includes(query.trim().toLowerCase());
-      return passSeverity && passQuery;
-    });
-  }, [logs, query, severity]);
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (severity !== "all") params.set("level", severity);
+      if (query.trim()) params.set("search", query.trim());
+      const res = await authFetch(`/api/v1/logs?${params.toString()}`);
+      const json = await res.json();
+      const data = json.success && json.data ? json.data : json;
+      setLogs(Array.isArray(data) ? data : data?.logs || []);
+    } catch (err) {
+      console.error("Failed to fetch logs:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [authFetch, severity, query]);
 
-  const handlePin = (entry) => {
-    setPinned((p) => (p && p.createdAt === entry.createdAt ? null : entry));
+  useEffect(() => {
+    const timer = setTimeout(fetchLogs, 300);
+    return () => clearTimeout(timer);
+  }, [fetchLogs]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const blob = new Blob([JSON.stringify(logs, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ecosim-logs-${new Date().toISOString()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const handleExport = () => {
-    const url = exportLogs();
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ecosim-logs-${new Date().toISOString()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  const handlePin = (entry) => {
+    setPinned((p) =>
+      p && p.createdAt === entry.createdAt ? null : entry
+    );
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 text-gray-400" />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-text-primary text-xl font-semibold font-mono">
+          Logbook
+        </h1>
+        <Button variant="ghost" size="sm" onClick={handleExport} loading={exporting}>
+          Export
+        </Button>
+      </div>
+
+      <div className="flex gap-2">
+        {severityFilters.map((f) => (
+          <Button
+            key={f}
+            variant={severity === f ? "primary" : "ghost"}
+            size="sm"
+            onClick={() => setSeverity(f)}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </Button>
+        ))}
+      </div>
+
+      <div className="flex gap-6">
+        <div className="flex-1 space-y-4">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search logs, e.g. 'Herbivore' or 'critical'"
-            className="pl-10 pr-4 py-2 w-full rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-800"
+            placeholder="Search logs..."
+            className="w-full bg-elevated border border-border rounded text-text-primary font-mono text-sm px-3 py-2 focus:border-accent outline-none ring-1 ring-transparent focus:ring-accent/20 placeholder:text-text-muted"
           />
-        </div>
 
-        <select
-          value={severity}
-          onChange={(e) => setSeverity(e.target.value)}
-          className="px-3 py-2 rounded-lg border bg-white dark:bg-gray-800"
-        >
-          <option value="all">All severities</option>
-          <option value="info">Info</option>
-          <option value="warning">Warning</option>
-          <option value="critical">Critical</option>
-        </select>
+          {loading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} variant="block" height={64} />
+              ))}
+            </div>
+          ) : logs.length === 0 ? (
+            <Card padding="p-8">
+              <p className="text-text-muted text-sm font-mono text-center">
+                No log entries found.
+              </p>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {logs.map((entry) => {
+                const color =
+                  severityColors[entry.level] ||
+                  severityColors[entry.severity] ||
+                  "#22C55E";
+                const level = entry.level || entry.severity || "info";
+                const isExpanded = expanded === entry.createdAt;
+                const hasData =
+                  entry.data &&
+                  (typeof entry.data === "object" ? Object.keys(entry.data).length > 0 : true);
 
-        <button
-          onClick={handleExport}
-          className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-2"
-        >
-          <Download className="w-4 h-4" /> Export
-        </button>
-
-        <button
-          onClick={refreshHistory}
-          className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700"
-        >
-          Refresh
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:col-span-2 space-y-3">
-          <AnimatePresence>
-            {filtered.length === 0 && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-gray-50 dark:bg-gray-800 rounded">
-                No logs match your filter.
-              </motion.div>
-            )}
-
-            {filtered.map((entry) => (
-              <motion.div
-                key={entry.createdAt + entry.message}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className={`p-4 rounded-lg border shadow-sm flex justify-between items-start ${
-                  entry.severity === "critical"
-                    ? "bg-red-50 border-red-200"
-                    : entry.severity === "warning"
-                    ? "bg-yellow-50 border-yellow-200"
-                    : "bg-white border-gray-200"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm font-medium">
-                      {entry.step !== undefined ? `Tick ${entry.step}` : ""}
+                return (
+                  <Card key={entry.createdAt || entry.id} padding="p-4">
+                    <div className="flex gap-3">
+                      {severityDot(color)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 text-text-muted font-mono text-xs">
+                          <span className="uppercase">{level}</span>
+                          <span>
+                            {entry.createdAt
+                              ? new Date(entry.createdAt).toLocaleString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                })
+                              : ""}
+                          </span>
+                        </div>
+                        <p className="text-text-primary text-sm mt-1 break-words">
+                          {entry.message}
+                        </p>
+                        {hasData && (
+                          <button
+                            onClick={() =>
+                              setExpanded(isExpanded ? null : entry.createdAt)
+                            }
+                            className="text-text-muted hover:text-text-primary text-xs font-mono mt-1 transition"
+                          >
+                            {isExpanded ? "hide data" : "show data"}
+                          </button>
+                        )}
+                        {isExpanded && hasData && (
+                          <pre className="mt-2 p-2 bg-elevated border border-border rounded text-text-muted text-xs font-mono overflow-x-auto max-h-48">
+                            {JSON.stringify(entry.data, null, 2)}
+                          </pre>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handlePin(entry)}
+                        title="Pin this entry"
+                        className="shrink-0 border border-border hover:border-border-bright text-text-muted hover:text-text-primary hover:bg-elevated transition rounded p-1.5"
+                      >
+                        <svg
+                          className="w-3.5 h-3.5"
+                          viewBox="0 0 24 24"
+                          fill={
+                            pinned && pinned.createdAt === entry.createdAt
+                              ? "currentColor"
+                              : "none"
+                          }
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+                        </svg>
+                      </button>
                     </div>
-                    <div className="text-xs text-gray-500">{new Date(entry.createdAt).toLocaleString()}</div>
-                  </div>
-                  <div className="mt-2 text-sm text-gray-800 dark:text-gray-100">{entry.message}</div>
-                </div>
-
-                <div className="flex flex-col items-end gap-2 ml-4">
-                  <button
-                    onClick={() => handlePin(entry)}
-                    title="Pin this entry"
-                    className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-700"
-                  >
-                    <Pin className="w-4 h-4" />
-                  </button>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <div className="space-y-3">
-          <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border">
-            <h3 className="font-semibold mb-2">Pinned</h3>
+        <div className="w-64 space-y-4 shrink-0">
+          <Card title="Pinned">
             {pinned ? (
-              <div>
-                <div className="text-xs text-gray-500">{new Date(pinned.createdAt).toLocaleString()}</div>
-                <div className="mt-2 text-sm">{pinned.message}</div>
-                <div className="mt-3 text-xs text-gray-400">Severity: {pinned.severity}</div>
+              <div className="space-y-2">
+                <p className="text-text-muted font-mono text-xs">
+                  {new Date(pinned.createdAt).toLocaleString()}
+                </p>
+                <p className="text-text-primary text-sm">{pinned.message}</p>
+                <p className="text-text-muted text-xs font-mono uppercase">
+                  {pinned.level || pinned.severity}
+                </p>
               </div>
             ) : (
-              <div className="text-sm text-gray-500">Pin important entries to view here.</div>
+              <p className="text-text-muted text-sm font-mono">
+                Pin important entries to view here.
+              </p>
             )}
-          </div>
+          </Card>
 
-          <div className="p-4 rounded-lg bg-white dark:bg-gray-900 border">
-            <h3 className="font-semibold mb-2">Quick actions</h3>
-            <button onClick={handleExport} className="w-full mb-2 px-3 py-2 bg-indigo-600 text-white rounded">Download JSON</button>
-            <button onClick={() => navigator.clipboard.writeText(JSON.stringify(logs.slice(0, 50), null, 2))} className="w-full px-3 py-2 bg-gray-100 rounded">Copy recent 50</button>
-          </div>
+          <Card title="Quick actions">
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-center"
+                onClick={handleExport}
+                loading={exporting}
+              >
+                Download JSON
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-center"
+                onClick={() => {
+                  navigator.clipboard.writeText(
+                    JSON.stringify(logs.slice(0, 50), null, 2)
+                  );
+                }}
+              >
+                Copy recent 50
+              </Button>
+            </div>
+          </Card>
         </div>
       </div>
     </div>

@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Alert from "../components/ui/Alert";
 
-export default function Login() {
-  const { login, user, loading: authLoading } = useAuth();
+export default function Signup() {
+  const { signup, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [successMsg] = useState(location.state?.message || "");
 
   useEffect(() => {
     if (user && !authLoading) {
@@ -21,18 +20,34 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setError("Please enter username and password.");
-      return;
-    }
-    setLoading(true);
     setError("");
 
+    if (!username.trim() || !password.trim()) {
+      setError("Please fill in all fields.");
+      return;
+    }
+    if (username.trim().length < 3) {
+      setError("Username must be at least 3 characters.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      const result = await login(username.trim(), password);
-      if (!result.success) {
-        setError(result.error || "Invalid username or password.");
+      const result = await signup(username.trim(), password);
+      if (result.success) {
+        navigate("/login", { state: { message: "Account created! Please log in." } });
+        return;
       }
+      setError(result.error || "Sign up failed.");
     } catch {
       setError("Connection error. Please try again.");
     } finally {
@@ -58,11 +73,6 @@ export default function Login() {
             <p className="text-text-muted text-sm">v3</p>
           </div>
 
-          {successMsg && (
-            <div className="mb-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-accent">
-              {successMsg}
-            </div>
-          )}
           {error && (
             <div className="mb-4">
               <Alert variant="error">{error}</Alert>
@@ -80,7 +90,7 @@ export default function Login() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="block w-full bg-elevated border border-border rounded text-text-primary font-mono text-sm px-3 py-2 placeholder-text-muted focus:border-accent outline-none ring-1 ring-transparent focus:ring-accent/20"
-                placeholder="Enter your username"
+                placeholder="Choose a username"
                 autoComplete="username"
                 disabled={loading}
                 required
@@ -97,8 +107,25 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="block w-full bg-elevated border border-border rounded text-text-primary font-mono text-sm px-3 py-2 placeholder-text-muted focus:border-accent outline-none ring-1 ring-transparent focus:ring-accent/20"
-                placeholder="Enter your password"
-                autoComplete="current-password"
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+                disabled={loading}
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="block text-text-secondary text-xs font-mono uppercase tracking-wider mb-1">
+                Confirm password
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="block w-full bg-elevated border border-border rounded text-text-primary font-mono text-sm px-3 py-2 placeholder-text-muted focus:border-accent outline-none ring-1 ring-transparent focus:ring-accent/20"
+                placeholder="Re-enter your password"
+                autoComplete="new-password"
                 disabled={loading}
                 required
               />
@@ -106,7 +133,7 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading || !username.trim() || !password.trim()}
+              disabled={loading || !username.trim() || !password.trim() || !confirmPassword.trim()}
               className="flex w-full items-center justify-center gap-2 rounded bg-accent hover:bg-accent-dim text-base text-sm font-semibold px-4 py-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading && (
@@ -115,14 +142,14 @@ export default function Login() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               )}
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? "Creating account..." : "Create account"}
             </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-text-muted">
-            Don&apos;t have an account?{" "}
-            <Link to="/signup" className="font-semibold text-accent hover:text-accent-dim transition-colors">
-              Sign up
+            Already have an account?{" "}
+            <Link to="/login" className="font-semibold text-accent hover:text-accent-dim transition-colors">
+              Sign in
             </Link>
           </p>
         </div>
