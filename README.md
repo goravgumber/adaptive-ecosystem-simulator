@@ -1,13 +1,15 @@
 # Adaptive Ecosystem Simulator
 
+![CI](https://github.com/Gauravg2630/adaptive-ecosystem-simulator/actions/workflows/ci.yml/badge.svg)
+
 A full-stack ecosystem simulation platform for exploring plant, herbivore, and
 carnivore population changes through live dashboards, persisted simulation
 history, monitoring, alerts, reports, and ML-assisted predictions.
 
-The project consists of a React dashboard, an Express API, a Python prediction
-service, MongoDB persistence, Redis-backed caching and background jobs, and
-Socket.IO updates. It includes Docker, Nginx, systemd, health checks, and CI
-assets for deployment-oriented development.
+The project consists of a React dashboard, an Express API, a Python FastAPI ML
+service, a dedicated simulation engine service, MongoDB persistence, Redis-backed
+caching and job queues, and Socket.IO updates. It includes Docker, Nginx, systemd,
+health checks, and CI assets for deployment-oriented development.
 
 ## Contents
 
@@ -80,34 +82,43 @@ Browser (React + Vite)
         |
         | HTTP /api/v1 and Socket.IO
         v
-Node.js / Express API ---------------- Redis
-        |                              | cache, rate limit state,
-        |                              | token revocation, BullMQ
-        |                              v
-        |                         Background worker
+Node.js / Express API --------------- Redis
+        |                             | cache, rate limit state,
+        |                             | token revocation, BullMQ
+        |                             v
+        |                        Background worker (BullMQ)
         |
-        +------------------------- MongoDB
-        |                          users, snapshots, predictions,
-        |                          events, metrics
+        +----------------------- MongoDB
+        |                        users, snapshots, predictions,
+        |                        events, metrics
         |
-        +------------------------- Python Flask ML service
-                                   prediction and training endpoints
+        +----------------------- Simulation Service (Node.js, port 3001)
+        |                        Lotka-Volterra engine, POST /tick
+        |
+        +----------------------- Python FastAPI ML Service (port 8000)
+                                 LSTM, Random Forest, ARIMA, LLM Insights
+                                 APScheduler background retraining
 ```
 
 In the container stack, Nginx provides a single public entry point and proxies
-the frontend, API, health checks, and Socket.IO traffic.
+the frontend, API, health checks, and Socket.IO traffic. The simulation engine
+has been extracted into a standalone microservice (`simulation-service`) running
+Lotka-Volterra equations. The ML service uses FastAPI with scikit-learn and
+TensorFlow LSTM models, with APScheduler-based background retraining.
 
 ## Technology Stack
 
 | Area | Implementation |
 | --- | --- |
 | Frontend | React 19, Vite 7, React Router, Recharts, Tailwind CSS, Framer Motion, Socket.IO Client |
-| Backend API | Node.js, Express 4, Mongoose, Socket.IO, Swagger UI |
+| Backend API | Node.js, Express 4, Mongoose, Socket.IO, Swagger UI, Bull Board |
 | Authentication | JWT access/refresh tokens, bcryptjs, Redis token revocation |
 | Security and HTTP | Helmet, CORS, rate limiting, mongo sanitization, XSS cleaning, compression |
 | Data | MongoDB 6 container, Redis 7 container |
 | Jobs | BullMQ worker using Redis |
-| ML microservice | Python, Flask, NumPy, pandas, scikit-learn, joblib |
+| ML microservice | Python, FastAPI, TensorFlow LSTM, scikit-learn, statsmodels ARIMA, APScheduler |
+| Simulation Engine | Dedicated Node.js microservice (Lotka-Volterra) |
+| CI/CD | GitHub Actions (lint, test, docker build) |
 | Deployment | Docker Compose, Nginx reverse proxy, systemd service, GitHub Actions |
 
 ## Repository Layout
