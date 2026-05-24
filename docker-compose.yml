@@ -18,7 +18,7 @@ services:
     container_name: ecosystem_redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -35,10 +35,28 @@ services:
     restart: unless-stopped
     environment:
       - PORT=8000
+      - REDIS_URL=redis://redis:6379
     ports:
       - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  simulation-service:
+    build:
+      context: ./simulation-service
+      dockerfile: Dockerfile
+    container_name: ecosystem_simulation
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health',r=>{process.exit(r.statusCode===200?0:1)})"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -55,15 +73,24 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/ecosystem
       - REDIS_URL=redis://redis:6379
       - ML_SERVICE_URL=http://ml-service:8000
-      - JWT_SECRET=super_secret_production_key_123!
+      - SIMULATION_SERVICE_URL=http://simulation-service:3001
+      - FRONTEND_URL=http://localhost
+      - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
     ports:
       - "5000:5000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health/live',r=>{process.exit(r.statusCode===200?0:1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     depends_on:
       mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
       ml-service:
+        condition: service_healthy
+      simulation-service:
         condition: service_healthy
 
   frontend:

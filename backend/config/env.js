@@ -15,8 +15,9 @@ const envSchema = z.object({
   ML_SERVICE_URL: z.string().url("ML_SERVICE_URL must be a valid URL"),
   FRONTEND_URL: z.string().url("FRONTEND_URL must be a valid URL").optional(),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1000),
   REDIS_URL: z.string().default("redis://127.0.0.1:6379"),
+  SIMULATION_SERVICE_URL: z.string().default("http://localhost:3001"),
 });
 
 const parsed = envSchema.safeParse(process.env);

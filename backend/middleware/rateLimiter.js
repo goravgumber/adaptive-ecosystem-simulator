@@ -20,8 +20,8 @@ const createLimiter = (limit, prefix) =>
     },
   });
 
-const loginLimiter = createLimiter(10, "rate-limit:login:");
-const registerLimiter = createLimiter(5, "rate-limit:register:");
+const loginLimiter = createLimiter(50, "rate-limit:login:");
+const registerLimiter = createLimiter(100, "rate-limit:register:");
 
 module.exports = {
   loginLimiter,

@@ -9,6 +9,9 @@ const compression = require("compression");
 const http = require("http");
 const { Server } = require("socket.io");
 const swaggerUi = require("swagger-ui-express");
+const { createBullBoard } = require("@bull-board/api");
+const { BullMQAdapter } = require("@bull-board/api/bullMQAdapter");
+const { ExpressAdapter } = require("@bull-board/express");
 
 require("./middleware/autoAsyncRouter");
 const config = require("./config/env");
@@ -18,6 +21,8 @@ const socketAuth = require("./sockets/socketAuth");
 const { notFoundHandler, errorHandler } = require("./middleware/errorHandler");
 const { startWorkers, stopWorkers } = require("./workers");
 const { addJob } = require("./queues");
+const { tickQueue, createTickWorker, getQueueStats } = require("./queues/simulationQueue");
+const requireRole = require("./middleware/requireRole");
 
 const authRoutes = require("./routes/auth");
 const simulationRoutesFactory = require("./routes/simulation");
@@ -28,9 +33,11 @@ const monitorRoutes = require("./routes/monitor");
 const alertsRoutesFactory = require("./routes/alerts");
 const metricsRoutes = require("./routes/metrics");
 const eventsRoutes = require("./routes/events");
+const historyRoutes = require("./routes/history");
 const predictionsRoutes = require("./routes/Predictions");
 const queuesRoutes = require("./routes/queues");
 const adminRoutes = require("./routes/admin");
+const usersRoutes = require("./routes/users");
 const healthRoutes = require("./routes/health");
 const swaggerSpec = require("./docs/swaggerSpec");
 
@@ -52,6 +59,7 @@ const redisClient = require("./config/redis");
 app.use(requestLogger);
 app.use(traceMiddleware);
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
 
 const apiLimiter = rateLimit({
   windowMs: config.RATE_LIMIT_WINDOW_MS,
@@ -67,9 +75,9 @@ const apiLimiter = rateLimit({
   },
 });
 
+app.use(cors({ origin: config.NODE_ENV === "production" ? config.FRONTEND_URL : true, credentials: true }));
 app.use(apiLimiter);
 app.use(helmet());
-app.use(cors({ origin: config.NODE_ENV === "production" ? config.FRONTEND_URL : true, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use(mongoSanitize());
@@ -127,11 +135,33 @@ const configureRoutes = () => {
   apiRouter.use("/predictions", predictionsRoutes);
   apiRouter.use("/queues", queuesRoutes);
   apiRouter.use("/admin", adminRoutes);
+  apiRouter.use("/simulation-history", historyRoutes);
+  apiRouter.use("/users", usersRoutes);
+
+  // Queue stats endpoint
+  apiRouter.get("/queue/stats", async (req, res) => {
+    try {
+      const stats = await getQueueStats();
+      res.json(stats);
+    } catch (error) {
+      logger.error("Queue stats error: %s", error.message);
+      res.status(500).json({ error: "Failed to get queue stats" });
+    }
+  });
 
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
   app.use("/api/v1", apiRouter);
   app.use("/api", apiRouter);
   app.use("/health", healthRoutes);
+
+  // Bull Board
+  const serverAdapter = new ExpressAdapter();
+  serverAdapter.setBasePath("/admin/queues");
+  createBullBoard({
+    queues: [new BullMQAdapter(tickQueue)],
+    serverAdapter,
+  });
+  app.use("/admin/queues", requireRole("admin"), serverAdapter.getRouter());
 
   app.get("/", (req, res) => {
     res.json({
@@ -155,12 +185,16 @@ const startServer = async () => {
 
     // Start BullMQ workers
     startWorkers(io);
+    createTickWorker(io);
 
     startBackgroundMonitoring();
     configureRoutes();
 
     io.on("connection", (socket) => {
       logger.info("Socket connected", { socketId: socket.id, userId: socket.user?.id });
+      if (socket.user?.id) {
+        socket.join(socket.user.id);
+      }
       socket.emit("connection-success", { socketId: socket.id, userId: socket.user?.id });
 
       socket.on("request-metrics", async () => {
@@ -217,12 +251,10 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 process.on("unhandledRejection", (reason) => {
   logger.error("Unhandled rejection detected", reason);
-  process.exit(1);
 });
 
 process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception detected", error);
-  process.exit(1);
 });
 
 if (require.main === module) {
