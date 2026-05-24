@@ -1,14 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
 import { io as ioClient } from "socket.io-client";
+import { simAPI } from "../services/api";
 
 const SimulationContext = createContext();
-const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ||
-  (import.meta.env.DEV ? "http://localhost:5000" : window.location.origin);
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 export const SimulationProvider = ({ children }) => {
-  const { authFetch, token } = useAuth();
+  const { token } = useAuth();
 
   const savedSettings = JSON.parse(localStorage.getItem("simulationSettings")) || {
     plants: 100,
@@ -21,14 +20,14 @@ export const SimulationProvider = ({ children }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [step, setStep] = useState(0);
   const [data, setData] = useState([]);
-  const [logs, setLogs] = useState([]); // real-time logs + alerts
+  const [logs, setLogs] = useState([]);
 
   const socketRef = useRef(null);
 
-  // connect socket when token available
+  const addLog = (entry) => setLogs((prev) => [entry, ...prev].slice(0, 200));
+
   useEffect(() => {
     if (!token) {
-      // disconnect if no token
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -49,41 +48,45 @@ export const SimulationProvider = ({ children }) => {
     });
 
     socket.on("alert", (alert) => {
-      console.log("Realtime alert:", alert);
-      setLogs((prev) => [alert, ...prev].slice(0, 200));
+      addLog({
+        id: Date.now(),
+        message: alert.message,
+        severity: alert.type || "info",
+        createdAt: new Date().toISOString(),
+        step: alert.step,
+      });
     });
 
-    // Listen for simulation updates
-    socket.on("simulation-update", (payload) => {
-      console.log("Simulation update received:", payload);
-      // Optionally update local state
+    socket.on("tick:update", (payload) => {
+      setData((prev) => [...prev, {
+        step: payload.step,
+        plants: payload.plants,
+        herbivores: payload.herbivores,
+        carnivores: payload.carnivores,
+        createdAt: payload.timestamp,
+      }]);
+      setStep(payload.step);
     });
 
-    // Listen for ecosystem alerts
-    socket.on("ecosystem-alerts", (alertData) => {
-      console.log("Ecosystem alerts received:", alertData);
-      if (alertData.alerts && alertData.alerts.length > 0) {
-        alertData.alerts.forEach(alert => {
-          const logEntry = {
-            id: Date.now() + Math.random(),
-            message: alert.message,
-            severity: alert.type,
-            createdAt: new Date().toISOString(),
-            step: alertData.step,
-          };
-          addLog(logEntry);
-        });
-      }
-    });
-
-    // Listen for simulation toggle events
     socket.on("simulation-toggle", (payload) => {
-      console.log("Simulation toggle event:", payload);
       setIsRunning(payload.isRunning);
+      addLog({
+        id: Date.now(),
+        message: payload.message || "Simulation toggled",
+        severity: "info",
+        createdAt: new Date().toISOString(),
+        step,
+      });
     });
 
-    socket.on("disconnect", (reason) => {
-      console.log("Socket disconnected:", reason);
+    socket.on("simulation-reset", () => {
+      setData([]);
+      setStep(0);
+      setIsRunning(false);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Socket disconnected");
     });
 
     return () => {
@@ -92,224 +95,79 @@ export const SimulationProvider = ({ children }) => {
     };
   }, [token]);
 
-  // Fixed saveSnapshot function - use relative path and proper error handling
-  const saveSnapshot = async (snapshot) => {
-    if (!token) {
-      console.warn("No token available, skipping snapshot save");
-      return;
-    }
-
-    try {
-      const response = await authFetch("/api/simulation", {
-        method: "POST",
-        body: JSON.stringify(snapshot),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log(" Snapshot saved successfully:", result);
-    } catch (err) {
-      console.error(" Error saving snapshot:", err);
-      // Add user-friendly error handling
-      addLog({
-        id: Date.now(),
-        message: "Failed to save simulation data to server",
-        severity: "error",
-        createdAt: new Date().toISOString(),
-        step: snapshot.step || step,
-      });
-    }
-  };
-
-  const loadHistory = async () => {
-    if (!token) {
-      console.warn("No token available, skipping history load");
-      return;
-    }
-
-    try {
-      const res = await authFetch("/api/simulation/logs");
-      if (!res.ok) throw new Error(`Failed to load history: ${res.status}`);
-
-      const history = await res.json();
-      if (Array.isArray(history) && history.length > 0) {
-        setData(history);
-        setStep(history[history.length - 1].step || 0);
-        console.log(" History loaded successfully:", history.length, "entries");
-      }
-    } catch (err) {
-      console.error(" Error loading history:", err);
-      addLog({
-        id: Date.now(),
-        message: "Failed to load simulation history",
-        severity: "error",
-        createdAt: new Date().toISOString(),
-        step: step,
-      });
-    }
-  };
-
-  // add manual refresh helper to fetch logs from backend /logs
-  const refreshHistory = async () => {
+  const startSimulation = async (opts = {}) => {
     if (!token) return;
-    try {
-      const res = await authFetch("/api/simulation/logs");
-      if (!res.ok) throw new Error(`Failed to refresh history: ${res.status}`);
-
-      const history = await res.json();
-      setData(history);
-      console.log(" History refreshed successfully");
-    } catch (err) {
-      console.error(" Error refreshing history:", err);
+    const body = {
+      plant_count: (opts && opts.plant_count) ?? settings.plants,
+      herbivore_count: (opts && opts.herbivore_count) ?? settings.herbivores,
+      predator_count: (opts && opts.predator_count) ?? settings.carnivores,
+      speed: (opts && opts.speed) ?? settings.speed,
+    };
+    const { data: result, error } = await simAPI.save(body);
+    if (error) {
+      addLog({ id: Date.now(), message: `Start failed: ${error}`, severity: "error", createdAt: new Date().toISOString(), step });
+      return;
     }
+    setIsRunning(true);
+    setStep(1);
+    setData([{
+      step: 1,
+      plants: body.plant_count,
+      herbivores: body.herbivore_count,
+      carnivores: body.predator_count,
+      createdAt: new Date().toISOString(),
+    }]);
   };
 
-  // add exportLogs util (return object URL)
-  const exportLogs = () => {
-    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: "application/json" });
-    return URL.createObjectURL(blob);
-  };
-
-  // Helper function to add logs
-  const addLog = (log) => setLogs((prev) => [log, ...prev].slice(0, 200));
-
-  // Fixed runStep function with better error handling
-  const runStep = () => {
-    setStep((prevStep) => prevStep + 1);
-    setData((prevData) => {
-      const last = prevData[prevData.length - 1] || settings;
-      const newPoint = {
-        step: prevData.length,
-        plants: Math.max(10, last.plants + Math.floor(Math.random() * 20 - 10)),
-        herbivores: Math.max(5, last.herbivores + Math.floor(Math.random() * 10 - 5)),
-        carnivores: Math.max(2, last.carnivores + Math.floor(Math.random() * 5 - 2)),
-        createdAt: new Date().toISOString(),
-      };
-
-      const events = [
-        { message: "New plant growth detected ", severity: "info" },
-        { message: "Herbivore consumed a plant ", severity: "info" },
-        { message: "Carnivore hunted a herbivore ", severity: "warning" },
-        { message: "Population stabilized ", severity: "info" },
-        { message: "Carnivore spotted in territory ", severity: "info" },
-      ];
-      const chosen = events[Math.floor(Math.random() * events.length)];
-      const logEntry = {
-        id: Date.now() + Math.random(),
-        message: chosen.message,
-        severity: chosen.severity,
-        createdAt: new Date().toISOString(),
-        step: newPoint.step,
-      };
-
-      // Save snapshot (backend) and let backend emit alerts if needed
-      saveSnapshot({
-        ...newPoint,
-        events: [chosen],
-        userId: "simulation-user" // Add userId if needed
-      });
-
-      // still log locally
-      addLog(logEntry);
-
-      return [...prevData, newPoint];
-    });
+  const toggleSimulation = async () => {
+    if (!token) return;
+    const { data: result, error } = await simAPI.toggle();
+    if (error) {
+      addLog({ id: Date.now(), message: `Toggle failed: ${error}`, severity: "error", createdAt: new Date().toISOString(), step });
+      return;
+    }
   };
 
   const resetSimulation = async () => {
-    setIsRunning(false);
+    if (!token) return;
+    const { error } = await simAPI.reset();
+    if (error) {
+      addLog({ id: Date.now(), message: `Reset failed: ${error}`, severity: "error", createdAt: new Date().toISOString(), step });
+      return;
+    }
+    setData([]);
     setStep(0);
-    try {
-      if (token) {
-        const response = await authFetch("/api/simulation/reset", {
-          method: "DELETE"
-        });
+    setIsRunning(false);
+    setLogs([]);
+  };
 
-        if (!response.ok) {
-          throw new Error(`Reset failed: ${response.status}`);
-        }
+  const setSpeed = async (speed) => {
+    if (!token) return;
+    await simAPI.speed(speed);
+    updateSettings({ speed });
+  };
 
-        console.log(" Simulation reset successfully");
-      }
-      setData([]);
-      setLogs([]);
-    } catch (err) {
-      console.error(" Error resetting simulation:", err);
-      addLog({
-        id: Date.now(),
-        message: "Failed to reset simulation on server",
-        severity: "error",
-        createdAt: new Date().toISOString(),
-        step: 0,
-      });
+  const refreshHistory = async () => {
+    if (!token) return;
+    const { data: history, error } = await simAPI.history();
+    if (error) return;
+    if (Array.isArray(history) && history.length > 0) {
+      setData(history);
+      setStep(history[history.length - 1].step || 0);
     }
   };
+
+  const loadHistory = refreshHistory;
 
   const updateSettings = (newSettings) => {
     const updated = { ...settings, ...newSettings };
     setSettings(updated);
     localStorage.setItem("simulationSettings", JSON.stringify(updated));
-
-    addLog({
-      id: Date.now(),
-      message: `Settings updated: ${Object.keys(newSettings).join(", ")}`,
-      severity: "info",
-      createdAt: new Date().toISOString(),
-      step: step,
-    });
   };
 
-  // Toggle simulation function for external use
-  const toggleSimulation = async () => {
-    try {
-      if (token) {
-        const response = await authFetch("/api/simulation/toggle", {
-          method: "POST",
-        });
-
-        if (!response.ok) {
-          throw new Error(`Toggle failed: ${response.status}`);
-        }
-
-        const result = await response.json();
-        setIsRunning(result.isRunning);
-        console.log(" Simulation toggled:", result.message);
-
-        addLog({
-          id: Date.now(),
-          message: result.message,
-          severity: "info",
-          createdAt: new Date().toISOString(),
-          step: step,
-        });
-      } else {
-        // Local toggle if no token
-        setIsRunning(!isRunning);
-      }
-    } catch (err) {
-      console.error(" Error toggling simulation:", err);
-      // Fallback to local toggle
-      setIsRunning(!isRunning);
-    }
-  };
-
-  // effects: load history when token available & run interval
   useEffect(() => {
-    if (token) {
-      loadHistory();
-    }
+    if (token) loadHistory();
   }, [token]);
-
-  useEffect(() => {
-    let interval;
-    if (isRunning) {
-      interval = setInterval(runStep, settings.speed);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning, settings.speed]);
 
   return (
     <SimulationContext.Provider
@@ -319,16 +177,14 @@ export const SimulationProvider = ({ children }) => {
         data,
         logs,
         settings,
-        startSimulation: () => setIsRunning(true),
-        pauseSimulation: () => setIsRunning(false),
+        startSimulation,
+        pauseSimulation: toggleSimulation,
         toggleSimulation,
         resetSimulation,
-        runStep,
         updateSettings,
-        clearDatabase: resetSimulation,
         refreshHistory,
-        exportLogs,
-        addLog, // Expose addLog for external components
+        setSpeed,
+        addLog,
       }}
     >
       {children}

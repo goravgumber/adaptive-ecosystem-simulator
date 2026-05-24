@@ -112,7 +112,7 @@ export const AuthProvider = ({ children }) => {
         throw new Error(payload?.error?.message || payload?.message || "Signup failed");
       }
 
-      return { success: true, message: "Signup successful! Please login." };
+      return { success: true, data: payload };
 
     } catch (err) {
       const errorMessage = err.message || "Signup failed";
