@@ -1,22 +1,22 @@
 const express = require("express");
 const router = express.Router();
+const authMiddleware = require("../middleware/auth");
 const Simulation = require("../models/Simulation");
 
 const cache = require("../utils/cache");
 const logger = require("../config/logger");
 
-router.get("/summary", async (req, res) => {
+router.get("/summary", authMiddleware, async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit) : 0;
-    const cacheKey = `reports:summary:${limit}`;
+    const cacheKey = `reports:summary:${req.user.id}:${limit}`;
 
-    // Try to fetch from Redis cache
     const cachedData = await cache.get(cacheKey);
     if (cachedData) {
       return res.json(cachedData);
     }
 
-    const data = await Simulation.find({})
+    const data = await Simulation.find({ userId: req.user.id })
       .sort({ step: 1 })
       .limit(limit > 0 ? limit : 0);
 
@@ -43,7 +43,6 @@ router.get("/summary", async (req, res) => {
 
     const responsePayload = { data, summary };
 
-    // Store in cache for 60 seconds
     await cache.set(cacheKey, responsePayload, 60);
 
     res.json(responsePayload);

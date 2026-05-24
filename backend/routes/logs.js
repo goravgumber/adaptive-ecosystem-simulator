@@ -5,23 +5,18 @@ const logger = require("../config/logger");
 
 const router = express.Router();
 
-/**
- * @route   GET /api/simulation/logs
- * @desc    Get recent activity logs for logged-in user
- * @access  Private
- */
 router.get("/", authMiddleware, async (req, res) => {
   try {
-    const logs = await Log.find({ userId: req.user.id })
+    const { limit = 200, level, search } = req.query;
+    const query = { userId: req.user.id };
+    if (level && level !== "all") query.level = level;
+    if (search) query.message = { $regex: search, $options: "i" };
+
+    const logs = await Log.find(query)
       .sort({ createdAt: -1 })
-      .limit(10);
+      .limit(parseInt(limit));
 
-    const formatted = logs.map((log) => ({
-      time: new Date(log.createdAt).toLocaleTimeString(),
-      event: log.event,
-    }));
-
-    res.json({ logs: formatted });
+    res.json(logs);
   } catch (err) {
     logger.error("Logs fetch error: %s", err.message);
     res.status(500).json({ message: "Server error" });

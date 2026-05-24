@@ -20,7 +20,13 @@ router.get("/", authMiddleware, validateRequest(eventQuerySchema), async (req, r
   if (category && category !== "all") query.category = category;
   if (severity && severity !== "all") query.severity = severity;
   if (resolved !== undefined) query.resolved = resolved === "true";
-  if (userId) query.userId = userId;
+  if (userId) {
+    if (userId === req.user.id || req.user.isAdmin) {
+      query.userId = userId;
+    }
+  } else {
+    query.userId = req.user.id;
+  }
 
   const events = await eventService.list(query, limit);
   const eventsWithVirtuals = events.map((event) => ({

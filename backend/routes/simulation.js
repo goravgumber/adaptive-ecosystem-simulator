@@ -168,8 +168,8 @@ const simulationRoutesFactory = (io) => {
         insights,
       };
 
-      // Emit insights to all connected clients for real-time updates
-      io.emit("simulation-insights", responseData);
+      // Emit insights to the owning user
+      io.to(`user-${req.user.id}`).emit("simulation-insights", responseData);
 
       res.json(responseData);
     } catch (err) {

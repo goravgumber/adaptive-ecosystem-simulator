@@ -17,7 +17,6 @@ const {
 
 const router = express.Router();
 const registerValidation = validate([
-  body("email").isEmail().withMessage("Invalid email format"),
   body("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
   body("username").notEmpty().withMessage("Username is required"),
 ]);

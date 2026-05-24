@@ -160,9 +160,12 @@ router.get("/realtime", authMiddleware, async (req, res) => {
 
 // Helper Functions
 async function getUserSessions() {
-  // Mock implementation - replace with actual session tracking
-  // You could track this via JWT tokens, Socket.IO connections, etc.
-  return Math.floor(Math.random() * 25) + 1;
+  try {
+    const users = await mongoose.model("Simulation").distinct("userId");
+    return users.length;
+  } catch {
+    return 0;
+  }
 }
 
 async function getDatabaseStats() {

@@ -2,10 +2,12 @@ const express = require("express");
 const os = require("os");
 const router = express.Router();
 const mongoose = require("mongoose");
+const authMiddleware = require("../middleware/auth");
+const Simulation = require("../models/Simulation");
 
 const startTime = Date.now();
 
-router.get("/", async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
     const uptime = Math.floor((Date.now() - startTime) / 1000);
     const dbStatus = mongoose.connection.readyState === 1 ? "Connected " : "Disconnected ";
@@ -13,7 +15,8 @@ router.get("/", async (req, res) => {
     const memoryUsage = process.memoryUsage();
     const cpuLoad = os.loadavg()[0].toFixed(2);
 
-    const activeUsers = Math.floor(Math.random() * 10) + 1;
+    const activeUsers = await Simulation.distinct("userId");
+    const activeUserCount = activeUsers.length;
 
     res.json({
       status: "OK",
@@ -24,7 +27,7 @@ router.get("/", async (req, res) => {
         heapUsed: (memoryUsage.heapUsed / 1024 / 1024).toFixed(2) + " MB",
       },
       cpuLoad,
-      activeUsers,
+      activeUsers: activeUserCount,
       lastChecked: new Date().toISOString(),
     });
   } catch (err) {
