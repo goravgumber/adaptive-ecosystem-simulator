@@ -1,448 +1,672 @@
-# 🌱 Adaptive Ecosystem Simulator
+# Adaptive Ecosystem Simulator
 
-> **A comprehensive real-time ecosystem simulation platform with AI-powered predictions and intelligent monitoring**
+A full-stack ecosystem simulation platform for exploring plant, herbivore, and
+carnivore population changes through live dashboards, persisted simulation
+history, monitoring, alerts, reports, and ML-assisted predictions.
 
-[![React](https://img.shields.io/badge/React-18.2.0-blue?logo=react)](https://reactjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-18.0+-green?logo=node.js)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green?logo=mongodb)](https://mongodb.com/)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow.js-4.0+-orange?logo=tensorflow)](https://www.tensorflow.org/js)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+The project consists of a React dashboard, an Express API, a Python prediction
+service, MongoDB persistence, Redis-backed caching and background jobs, and
+Socket.IO updates. It includes Docker, Nginx, systemd, health checks, and CI
+assets for deployment-oriented development.
 
-## 📋 Table of Contents
+## Contents
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Tech Stack](#-tech-stack)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [Project Structure](#-project-structure)
-- [API Documentation](#-api-documentation)
-- [AI/ML Pipeline](#-aiml-pipeline)
-- [Screenshots](#-screenshots)
-- [Contributing](#-contributing)
-- [Author](#-author)
-- [License](#-license)
+- [What It Does](#what-it-does)
+- [Architecture](#architecture)
+- [Technology Stack](#technology-stack)
+- [Repository Layout](#repository-layout)
+- [Quick Start With Docker](#quick-start-with-docker)
+- [Local Development Setup](#local-development-setup)
+- [Environment Configuration](#environment-configuration)
+- [Using The Application](#using-the-application)
+- [API Overview](#api-overview)
+- [Realtime Events And Background Jobs](#realtime-events-and-background-jobs)
+- [ML Service](#ml-service)
+- [Health Checks And Monitoring](#health-checks-and-monitoring)
+- [Testing And Validation](#testing-and-validation)
+- [Deployment Notes](#deployment-notes)
+- [Current Implementation Notes](#current-implementation-notes)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 🎯 Overview
+## What It Does
 
-The **Adaptive Ecosystem Simulator** is a full-stack web application that models complex ecosystem dynamics with real-time population interactions. Built over **27 days of continuous development**, it features machine learning-powered predictions, intelligent monitoring, and comprehensive data visualization.
+### Simulation and dashboard
 
-### 🌟 Key Highlights
+- Runs a simple three-population simulation with plants, herbivores, and
+  carnivores.
+- Saves authenticated users' simulation snapshots in MongoDB.
+- Displays current values, population trends, activity logs, and generated
+  ecosystem insights.
+- Provides settings for initial populations and simulation speed.
 
-- **Real-time Simulation Engine**: Dynamic population modeling with predator-prey relationships
-- **AI-Powered Predictions**: 85% accuracy ecosystem collapse forecasting using TensorFlow.js
-- **Intelligent Monitoring**: System health tracking with automated alerts
-- **Interactive Dashboards**: Real-time data visualization with Recharts
-- **WebSocket Integration**: Live updates across all connected clients
-- **Production Ready**: Complete with authentication, error handling, and responsive design
+### Predictions and analysis
 
-## ✨ Features
+- Generates collapse-risk predictions from recent simulation history.
+- Produces population forecasts and intervention recommendations.
+- Analyzes patterns and exposes prediction history and statistics.
+- Supports queued ML training and prediction-generation operations.
 
-### 🔬 Core Simulation
-- **Population Dynamics**: Plants, Herbivores, and Carnivores with realistic interactions
-- **Environmental Factors**: Carrying capacity, growth rates, and survival mechanics
-- **Real-time Updates**: Live simulation with WebSocket synchronization
-- **Pause/Resume Control**: Start, stop, and reset simulations dynamically
+Predictions are model-assisted analysis for this simulator, not validated
+scientific or environmental forecasts.
 
-### 🤖 AI & Machine Learning
-- **Collapse Prediction**: Forecasts ecosystem collapse risk 5 steps ahead
-- **Population Forecasting**: 7-day ahead population trend predictions
-- **Smart Recommendations**: AI-suggested interventions for ecosystem stability
-- **Pattern Recognition**: Detects cycles and anomalies in ecosystem behavior
-- **Self-Learning Models**: Continuous improvement with new simulation data
+### Operations
 
-### 📊 Data & Analytics
-- **Interactive Charts**: Line, area, bar, and radial charts with Recharts
-- **Real-time Metrics**: CPU, memory, and connection monitoring
-- **Historical Analysis**: Complete simulation history with trend analysis
-- **Export Capabilities**: CSV and JSON data export functionality
+- JWT authentication with access tokens, refresh-token rotation, logout, and
+  logout-all session invalidation.
+- Role-based administrative endpoints for users and BullMQ jobs.
+- Redis-backed caching, rate limiting, token revocation, and job queues.
+- System metrics, operational alerts, event tracking, and readiness/liveness
+  probes.
+- Authenticated Socket.IO connections for live updates.
 
-### 🔐 User Management
-- **Authentication**: JWT-based secure login/register system
-- **User Profiles**: Personal dashboards and simulation history
-- **Session Management**: Persistent login with token validation
+### Frontend pages
 
-### 📱 User Experience
-- **Responsive Design**: Mobile-first responsive layout
-- **Dark Mode**: Toggle between light and dark themes
-- **Error Boundaries**: Graceful error handling with user-friendly messages
-- **Loading States**: Smooth loading animations and skeleton screens
+After login, the web application provides:
 
-### 🚨 Monitoring & Alerts
-- **System Health**: Real-time server and database monitoring
-- **Intelligent Alerts**: Automated notifications for critical events
-- **Event Logging**: Comprehensive activity logging and audit trails
-- **Performance Metrics**: CPU, memory, and connection tracking
+- Dashboard
+- Simulation
+- Predictions
+- Monitoring
+- Alerts
+- Reports with CSV export
+- Logbook with JSON export
+- Settings and dark mode
 
-## 🛠 Tech Stack
+## Architecture
 
-### Frontend
-- **React 18.2** - Modern UI library with hooks
-- **Tailwind CSS 3.3** - Utility-first styling framework
-- **Framer Motion 10** - Smooth animations and transitions
-- **Recharts 2.8** - Responsive chart components
-- **React Router 6** - Client-side routing
-- **Lucide React** - Beautiful icon library
+```text
+Browser (React + Vite)
+        |
+        | HTTP /api/v1 and Socket.IO
+        v
+Node.js / Express API ---------------- Redis
+        |                              | cache, rate limit state,
+        |                              | token revocation, BullMQ
+        |                              v
+        |                         Background worker
+        |
+        +------------------------- MongoDB
+        |                          users, snapshots, predictions,
+        |                          events, metrics
+        |
+        +------------------------- Python Flask ML service
+                                   prediction and training endpoints
+```
 
-### Backend
-- **Node.js 18+** - JavaScript runtime environment
-- **Express.js 4.18** - Fast web framework
-- **MongoDB 6.0** - NoSQL database
-- **Mongoose 7.5** - MongoDB object modeling
-- **Socket.IO 4.7** - Real-time communication
-- **JWT** - JSON Web Token authentication
-- **bcryptjs** - Password hashing
+In the container stack, Nginx provides a single public entry point and proxies
+the frontend, API, health checks, and Socket.IO traffic.
 
-### AI/ML Stack
-- **TensorFlow.js 4.10** - Browser-based machine learning
-- **Python 3.9+** - ML service backend
-- **scikit-learn 1.3** - Machine learning algorithms
-- **pandas 2.0** - Data manipulation and analysis
-- **Flask 2.3** - Python web microservice
+## Technology Stack
 
-### DevOps & Tools
-- **Git** - Version control
-- **npm/yarn** - Package management
-- **dotenv** - Environment configuration
-- **CORS** - Cross-origin resource sharing
+| Area | Implementation |
+| --- | --- |
+| Frontend | React 19, Vite 7, React Router, Recharts, Tailwind CSS, Framer Motion, Socket.IO Client |
+| Backend API | Node.js, Express 4, Mongoose, Socket.IO, Swagger UI |
+| Authentication | JWT access/refresh tokens, bcryptjs, Redis token revocation |
+| Security and HTTP | Helmet, CORS, rate limiting, mongo sanitization, XSS cleaning, compression |
+| Data | MongoDB 6 container, Redis 7 container |
+| Jobs | BullMQ worker using Redis |
+| ML microservice | Python, Flask, NumPy, pandas, scikit-learn, joblib |
+| Deployment | Docker Compose, Nginx reverse proxy, systemd service, GitHub Actions |
 
-## 🚀 Installation
+## Repository Layout
 
-### Prerequisites
-- **Node.js** 18.0 or higher
-- **Python** 3.9 or higher
-- **MongoDB** 6.0 or higher
-- **Git** for version control
+```text
+adaptive-ecosystem-simulator/
+|-- backend/
+|   |-- config/              # Validated Node environment and Redis connection
+|   |-- controllers/         # Health, dashboard, monitoring, simulation logic
+|   |-- docs/                # Swagger definition
+|   |-- middleware/          # Auth, RBAC, validation, tracing, errors
+|   |-- ml-service/          # Standalone Python Flask service
+|   |-- models/              # Mongoose schemas
+|   |-- queues/              # BullMQ queue setup
+|   |-- repositories/        # Data-access helpers
+|   |-- routes/              # HTTP API routes
+|   |-- services/            # Auth, AI, prediction, event, report services
+|   |-- sockets/             # Socket authentication
+|   |-- tests/               # Node unit tests
+|   |-- workers/             # BullMQ background worker
+|   |-- .env.example         # Backend configuration template
+|   `-- server.js            # Express and Socket.IO entry point
+|-- frontend/
+|   |-- public/
+|   |-- src/
+|   |   |-- components/
+|   |   |-- context/
+|   |   |-- pages/
+|   |   `-- services/
+|   |-- Dockerfile
+|   `-- vite.config.js
+|-- deployment/
+|   `-- ecosystem-backend.service
+|-- docs/
+|   |-- api.md
+|   `-- backend-platform.md
+|-- infra/nginx/nginx.conf
+|-- scripts/healthcheck.sh
+|-- docker-compose.yml
+|-- docker-compose.dev.yml
+`-- README.md
+```
 
-### 1. Clone Repository
+## Quick Start With Docker
+
+The full Compose file describes MongoDB, Redis, the ML service, the backend,
+the built frontend, and an Nginx reverse proxy.
+
+### Requirements
+
+- Git
+- Docker Engine with the Docker Compose plugin
+
+### Start the stack
+
 ```bash
 git clone https://github.com/Gauravg2630/adaptive-ecosystem-simulator.git
 cd adaptive-ecosystem-simulator
+docker compose up --build -d
 ```
 
-### 2. Backend Setup
+Expected endpoints:
+
+| Service | URL |
+| --- | --- |
+| Application through Nginx | `http://localhost` |
+| Static frontend container directly (no API proxy) | `http://localhost:8080` |
+| Backend directly | `http://localhost:5000` |
+| API documentation | `http://localhost:5000/api/docs` |
+| Backend health | `http://localhost:5000/health` |
+| ML health | `http://localhost:8000/health` |
+
+Check services and backend health:
+
 ```bash
-cd backend
-npm install
-
-# Install additional ML dependencies
-npm install @tensorflow/tfjs-node
-
-# Python ML service dependencies
-cd backend/ml-service
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+docker compose ps
+./scripts/healthcheck.sh
 ```
 
-> Note: The Python ML service is currently configured for scikit-learn-based model support on Python 3.14. If you need TensorFlow model support in the Python service, use Python 3.13 or earlier and add TensorFlow to `backend/ml-service/requirements.txt`.
+Follow logs or stop the stack:
 
-### 3. Frontend Setup
 ```bash
-cd frontend
-npm install
+docker compose logs -f backend ml-service
+docker compose down
 ```
 
-### 4. Environment Configuration
+Use `docker compose down -v` only when you intentionally want to delete the
+MongoDB and Redis Docker volumes.
 
-Create `.env` file in the backend directory:
-```env
-PORT=5000
-MONGO_URI=mongodb://localhost:27017/ecosystem-simulator
-JWT_SECRET=your-super-secret-jwt-key-here
-NODE_ENV=development
-ML_SERVICE_URL=http://localhost:8000
-```
+### Security before deployment
 
-Create `.env` file in the frontend directory:
-```env
-REACT_APP_API_URL=http://localhost:5000
-REACT_APP_WS_URL=http://localhost:5000
-```
+The checked-in Compose configuration contains a placeholder `JWT_SECRET` and
+publishes database/cache ports for development visibility. Before exposing a
+deployment publicly, provide a strong private JWT secret and restrict MongoDB
+and Redis network exposure.
 
-### 5. Database Setup
+### Container compatibility note
+
+The current frontend uses Vite 7, while `frontend/Dockerfile` presently starts
+its build stage from Node 18. If the Docker frontend build reports an
+unsupported Node engine, update that build image to a Vite-supported Node
+release (Node 20.19+ or Node 22.12+) before building the full stack.
+
+## Local Development Setup
+
+Local development is the most direct way to run the current source with hot
+reload. MongoDB and Redis can be installed locally or run as containers.
+
+### Requirements
+
+- Node.js `20.19+` or `22.12+` for the Vite 7 frontend
+- npm
+- Python `3.11+` with `venv`
+- MongoDB and Redis, or Docker for those two services
+
+### 1. Start MongoDB and Redis
+
+To use containers only for infrastructure:
+
 ```bash
-# Start MongoDB service
-mongod
-
-# The application will automatically create required collections
+docker compose -f docker-compose.dev.yml up -d mongodb redis
 ```
 
-## 📦 Usage
+This exposes MongoDB on `localhost:27017` and Redis on `localhost:6379`.
 
-### 1. Start the Backend Server
-```bash
-cd backend
-npm start
-```
-Server runs on `http://localhost:5000`
-
-### 2. Start the Python ML Service
-```bash
-cd backend/ml-service
-python app.py
-```
-ML service runs on `http://localhost:8000`
-
-### 3. Start the Frontend
-```bash
-cd frontend
-npm start
-```
-Application opens at `http://localhost:3000`
-
-### 4. First Time Setup
-1. **Register** a new account at `/register`
-2. **Login** with your credentials
-3. **Start a simulation** from the main dashboard
-4. **Explore AI predictions** in the Predictions tab
-5. **Monitor system health** in the Monitoring tab
-
-## � Backend Setup
+### 2. Configure and install the backend
 
 ```bash
 cd backend
-npm install
+cp .env.example .env
+npm ci
 ```
 
-## 🐍 Python ML Setup
+At minimum, replace `JWT_SECRET` in `backend/.env` with a private value of at
+least 12 characters.
+
+### 3. Install the Python ML service
+
+The Node backend attempts to launch the local Python service when it starts.
+Install its dependencies and point the backend at that virtual environment:
 
 ```bash
-cd backend/ml-service
+cd ml-service
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+cd ..
 ```
 
-## 📁 ML Service Architecture
+Add this optional local override to `backend/.env`, using the absolute path on
+your machine:
 
-The ML service is a standalone Flask microservice that is responsible for prediction and forecasting workloads. It is intentionally separated from the main Node.js backend so the AI pipeline can scale independently.
+```env
+PYTHON_EXECUTABLE=/absolute/path/to/adaptive-ecosystem-simulator/backend/ml-service/venv/bin/python
+```
+
+### 4. Run the backend
+
+From `backend/`:
+
+```bash
+npm run dev
+```
+
+The API starts at `http://localhost:5000`. Under the standard local flow it
+also starts the ML service on `http://localhost:8000`, so do not launch a
+second local ML process on the same port.
+
+### 5. Run the frontend
+
+In another terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173`. Vite proxies `/api` requests to the backend, and
+the frontend connects to Socket.IO at `http://localhost:5000` during
+development.
+
+### Optional frontend environment
+
+Create `frontend/.env.local` only if the API or Socket.IO server is hosted
+elsewhere:
+
+```env
+VITE_API_BASE_URL=http://localhost:5000/api/v1
+VITE_SOCKET_URL=http://localhost:5000
+```
+
+## Environment Configuration
+
+### Backend (`backend/.env`)
+
+Start from `backend/.env.example`.
+
+| Variable | Required | Default/example | Purpose |
+| --- | --- | --- | --- |
+| `NODE_ENV` | No | `development` | `development`, `test`, or `production` |
+| `PORT` | No | `5000` | Node API port |
+| `MONGO_URI` | Yes | `mongodb://localhost:27017/ecosystem` | MongoDB connection URL |
+| `JWT_SECRET` | Yes | Change the example | Signs access and refresh tokens; minimum 12 characters |
+| `JWT_ACCESS_EXPIRES_IN` | No | `15m` | Access-token lifetime |
+| `JWT_REFRESH_EXPIRES_IN` | No | `7d` | Refresh-token lifetime |
+| `REDIS_URL` | No | `redis://127.0.0.1:6379` | Cache, queues, rate limiting, and token state |
+| `ML_SERVICE_URL` | Yes | `http://localhost:8000` | Flask prediction service base URL |
+| `FRONTEND_URL` | Recommended in production | Example is commented | Allowed browser origin in production |
+| `RATE_LIMIT_WINDOW_MS` | No | `900000` | Rate-limit window in milliseconds |
+| `RATE_LIMIT_MAX` | No | `100` | Maximum requests per window |
+| `PYTHON_EXECUTABLE` | No | `python3` | Python used when backend starts the local ML service |
+| `ML_SERVICE_STARTUP_TIMEOUT_MS` | No | `15000` | ML child startup timeout |
+| `ML_SERVICE_STARTUP_RETRIES` | No | `3` | ML child startup attempts |
+| `ML_SERVICE_RETRY_INTERVAL_MS` | No | `5000` | Delay between ML startup attempts |
+
+### ML service
+
+The ML service reads `backend/.env` and optionally
+`backend/ml-service/ml-service.env`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ML_SERVICE_PORT` | `8000` | Flask listening port |
+| `ML_MODEL_DIR` | `backend/ml-service/models` | Persisted model directory |
+| `COLLAPSE_MODEL_FILE` | `collapse_predictor.pkl` in model directory | Collapse model file |
+| `POPULATION_MODEL_FILE` | `population_forecaster.pkl` in model directory | Forecast model file |
+| `ML_LOG_DIR` | `backend/ml-service/logs` | ML log directory |
+| `MIN_PREDICTION_DATA_POINTS` | `5` | ML endpoint minimum prediction data |
+| `MIN_FORECAST_DATA_POINTS` | `20` | ML endpoint minimum forecast history |
+| `MAX_FORECAST_STEPS` | `14` | ML forecast horizon limit |
+
+The Node prediction layer applies its own history checks: collapse prediction
+requires at least 10 saved simulation steps and population forecasting
+requires at least 20.
+
+### Frontend
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | `/api/v1` | Backend API prefix used by the browser |
+| `VITE_SOCKET_URL` | Local backend in development; current origin in production | Socket.IO host |
+
+## Using The Application
+
+1. Open the frontend and create an account on the login screen. Usernames
+   require at least 3 characters and passwords at least 8.
+2. Sign in. The API issues an access token and rotating refresh token used by
+   protected requests.
+3. Open **Simulation**, choose starting populations or speed in **Settings**,
+   and start generating snapshots.
+4. Use **Dashboard**, **Monitoring**, **Alerts**, **Reports**, and **Logbook**
+   to review persisted activity and exported data.
+5. After enough snapshots exist, open **Predictions** to generate collapse
+   risk, forecast, recommendation, and pattern analysis outputs.
+
+The UI stores authentication tokens, theme choice, and simulation settings in
+browser `localStorage`. Do not use shared browser profiles for sensitive
+deployments.
+
+## API Overview
+
+The current API prefix is:
 
 ```text
-[Frontend] --> [Node Backend] --> [ML Service Flask API]
-                     |                 |
-                     |                 --> /health
-                     |                 --> /predict/collapse
-                     |                 --> /predict/populations
-                     |
-                     --> [MongoDB]
+http://localhost:5000/api/v1
 ```
 
-- `backend/ml-service/app.py` — Flask application entrypoint
-- `backend/ml-service/config/settings.py` — runtime settings and environment configuration
-- `backend/ml-service/services/prediction_service.py` — prediction and model loading logic
-- `backend/ml-service/services/training_service.py` — model training persistence manager
-- `backend/ml-service/services/monitoring_service.py` — health checks and service metadata
-- `backend/ml-service/utils/logger.py` — structured logging with rotating files
-- `backend/ml-service/utils/validators.py` — request validation helpers
-- `backend/ml-service/models/` — persisted model artifacts
-- `backend/ml-service/logs/` — runtime and error logs
+Requests to the compatibility `/api/...` application prefix are handled
+alongside their `/api/v1/...` equivalents. Swagger UI is available at
+`/api/docs`.
 
-## 🚢 Deployment Notes
+Protected endpoints require:
 
-- Use `ML_SERVICE_URL` in `backend/.env` to point the Node backend to the ML service.
-- The backend health endpoint proxies ML health through `/api/health`.
-- The Python service exits if initialization fails, so startup health is explicit.
-
-## �📁 Project Structure
-
-```
-adaptive-ecosystem-simulator/
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/          # Reusable UI components
-│   │   ├── pages/              # Main application pages
-│   │   ├── context/            # React context providers
-│   │   ├── hooks/              # Custom React hooks
-│   │   └── utils/              # Utility functions
-│   ├── package.json
-│   └── tailwind.config.js
-├── backend/
-│   ├── controllers/            # Route controllers
-│   ├── middleware/             # Express middleware
-│   ├── models/                 # MongoDB schemas
-│   ├── routes/                 # API route definitions
-│   ├── services/               # Business logic services
-│   ├── ml-service/             # Python ML microservice
-│   │   ├── app.py              # Flask ML API entrypoint
-│   │   ├── config/             # Service configuration and environment settings
-│   │   ├── models/             # Pickled model artifacts
-│   │   ├── services/           # Prediction and training services
-│   │   └── utils/              # Logging and validation helpers
-│   ├── server.js               # Main server entry point
-│   └── package.json
-├── README.md
-└── .gitignore
+```http
+Authorization: Bearer <access-token>
+Content-Type: application/json
 ```
 
-## 🔌 API Documentation
+### Authentication example
 
-### Authentication Endpoints
-```
-POST /api/auth/register     # User registration
-POST /api/auth/login        # User login
-GET  /api/auth/validate     # Token validation
-GET  /api/auth/profile      # User profile
-```
+Create a user:
 
-### Simulation Endpoints
-```
-POST /api/simulation/start  # Start new simulation
-POST /api/simulation/stop   # Stop current simulation
-POST /api/simulation/reset  # Reset simulation state
-GET  /api/simulation/status # Get simulation status
-GET  /api/simulation/history # Get simulation history
+```bash
+curl -X POST http://localhost:5000/api/v1/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo_user","password":"change-me-now"}'
 ```
 
-### AI Prediction Endpoints
-```
-POST /api/predictions/collapse      # Generate collapse prediction
-POST /api/predictions/forecast      # Generate population forecast
-POST /api/predictions/recommendations # Get smart recommendations
-POST /api/predictions/patterns      # Analyze ecosystem patterns
-GET  /api/predictions/stats         # Get prediction statistics
-```
+Log in:
 
-### Monitoring Endpoints
-```
-GET /api/monitor           # Get system status
-GET /api/metrics           # Get performance metrics
-GET /api/alerts            # Get system alerts
-GET /api/events            # Get event logs
+```bash
+curl -X POST http://localhost:5000/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"demo_user","password":"change-me-now"}'
 ```
 
-## 🧠 AI/ML Pipeline
+The login response includes `accessToken`, `refreshToken`, and the public user
+record. Use the returned access token for protected routes:
 
-### Machine Learning Models
-
-1. **Collapse Predictor**
-   - **Algorithm**: Random Forest Classifier
-   - **Features**: 18 ecosystem indicators (population ratios, trends, volatility)
-   - **Accuracy**: ~85% on test data
-   - **Prediction Horizon**: 5 simulation steps
-
-2. **Population Forecaster**
-   - **Algorithm**: Linear Regression with trend analysis
-   - **Features**: Historical population data, growth rates
-   - **Confidence**: Decreases with forecast horizon
-   - **Prediction Horizon**: 7 simulation steps
-
-3. **Pattern Recognition**
-   - **Algorithm**: Statistical analysis with anomaly detection
-   - **Features**: Population cycles, stability metrics
-   - **Output**: Health scores, stability classification
-
-### Model Training Pipeline
-```python
-# Automatic retraining every 24 hours
-# Uses latest simulation data
-# Validates performance before deployment
-# Maintains model versioning
+```bash
+curl http://localhost:5000/api/v1/simulation/status \
+  -H 'Authorization: Bearer <access-token>'
 ```
 
-## 🤝 Contributing
+### Endpoint summary
 
-Contributions are welcome! Please follow these steps:
+Authentication:
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
-3. **Commit** your changes (`git commit -m 'Add some AmazingFeature'`)
-4. **Push** to the branch (`git push origin feature/AmazingFeature`)
-5. **Open** a Pull Request
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/auth/signup` | Public | Create a user |
+| `POST` | `/api/v1/auth/register` | Public | Email-validated registration compatibility route |
+| `POST` | `/api/v1/auth/login` | Public | Issue access and refresh tokens |
+| `POST` | `/api/v1/auth/refresh` | Public | Rotate a refresh token |
+| `POST` | `/api/v1/auth/logout` | Authenticated | Revoke the current session |
+| `POST` | `/api/v1/auth/logout-all` | Authenticated | Revoke all user sessions |
+| `GET` | `/api/v1/auth/validate` | Authenticated | Validate access token |
+| `GET` | `/api/v1/auth/me` | Authenticated | Return current profile |
 
-### Development Guidelines
-- Follow ESLint and Prettier configurations
-- Write unit tests for new features
-- Update documentation for API changes
-- Use conventional commit messages
+Simulation and dashboard:
 
-## 👨‍💻 Author
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/simulation` | Authenticated | Store a population snapshot |
+| `GET` | `/api/v1/simulation` | Authenticated | Fetch latest saved snapshot |
+| `DELETE` | `/api/v1/simulation/reset` | Authenticated | Remove user history and reset state |
+| `DELETE` | `/api/v1/simulation/clear` | Authenticated | Clear user simulation history |
+| `POST` | `/api/v1/simulation/toggle` | Authenticated | Pause or resume backend simulation state |
+| `POST` | `/api/v1/simulation/speed` | Authenticated | Set tick speed; minimum `100` ms |
+| `GET` | `/api/v1/simulation/status` | Authenticated | Read running/speed state |
+| `GET` | `/api/v1/simulation/logs` | Authenticated | Last 50 stored snapshots |
+| `GET` | `/api/v1/simulation/history` | Authenticated | History with `limit` and `sort` query options |
+| `GET` | `/api/v1/simulation/insights` | Authenticated | Generate rule-based population insights |
+| `GET` | `/api/v1/dashboard` | Authenticated | Latest population stats and trend |
 
-**Gorav Gumber**
-- **Status**: BTech 3rd Year, Computer Science Engineering
-- **GitHub**: [@goravgumber](https://github.com/Gauravg2630)
-- **LinkedIn**: [Gorav Gumber](https://linkedin.com/in/gorav-gumber-9319a2342)
-- **Email**: goravgumberg@gmail.com
+Predictions:
 
-### Development Journey
-This project was built over **27 consecutive days** as part of a comprehensive full-stack development challenge, showcasing:
-- Modern web development practices
-- Real-time application architecture
-- Machine learning integration
-- Production-ready deployment strategies
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/predictions/collapse` | Authenticated | Generate collapse-risk result |
+| `POST` | `/api/v1/predictions/forecast` | Authenticated | Generate population forecast |
+| `POST` | `/api/v1/predictions/recommendations` | Authenticated | Generate suggested actions |
+| `POST` | `/api/v1/predictions/patterns` | Authenticated | Analyze patterns |
+| `GET` | `/api/v1/predictions` | Authenticated | List saved predictions |
+| `GET` | `/api/v1/predictions/stats` | Authenticated | Prediction statistics |
+| `GET` | `/api/v1/predictions/latest/:type` | Authenticated | Latest outputs by type |
+| `PUT` | `/api/v1/predictions/:id/evaluate` | Authenticated | Record actual outcome/accuracy |
+| `POST` | `/api/v1/predictions/train` | Admin | Queue model training |
 
-## 📜 License
+Monitoring, reports, and events:
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/metrics` | Authenticated | Capture and return metrics |
+| `GET` | `/api/v1/metrics/history` | Authenticated | Retrieve historical metrics |
+| `GET` | `/api/v1/metrics/realtime` | Authenticated | Chart-oriented metrics data |
+| `GET` | `/api/v1/alerts` | Authenticated | Alerts derived from latest simulation |
+| `GET` | `/api/v1/alerts/history` | Authenticated | Historical simulation alerts |
+| `POST` | `/api/v1/alerts/monitor` | Authenticated | Activate alert-monitoring response flow |
+| `GET` | `/api/v1/events` | Authenticated | Query recorded events |
+| `GET` | `/api/v1/events/stats` | Authenticated | Aggregated event statistics |
+| `GET` | `/api/v1/events/critical` | Authenticated | Critical and unresolved events |
+| `GET` | `/api/v1/events/category/:category` | Authenticated | Filter events by category |
+| `GET` | `/api/v1/events/user/:userId` | Owner or admin | User event history |
+| `POST` | `/api/v1/events` | Authenticated | Create an event |
+| `PATCH` | `/api/v1/events/:id/resolve` | Authenticated | Resolve an event |
+| `PATCH` | `/api/v1/events/:id/tags` | Authenticated | Add tags to an event |
+| `DELETE` | `/api/v1/events/:id` | Admin | Delete an event |
+| `GET` | `/api/v1/logs` | Authenticated | Recent application log records |
+| `GET` | `/api/v1/reports/summary` | Public currently | Population summary report |
+| `GET` | `/api/v1/monitor` | Public currently | Basic process/database status |
 
+Administrative operations:
+
+| Method | Path | Access | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/admin/overview` | Admin | User/simulation/event overview |
+| `GET` | `/api/v1/admin/users` | Admin | Paginated users |
+| `PATCH` | `/api/v1/admin/users/:userId/role` | Admin | Change a role |
+| `GET` | `/api/v1/queues` | Admin | Queue counts |
+| `GET` | `/api/v1/queues/:queueName/jobs` | Admin | Inspect jobs |
+| `GET` | `/api/v1/queues/:queueName/jobs/:jobId` | Admin | Inspect one job |
+| `POST` | `/api/v1/queues/:queueName/jobs` | Admin | Enqueue an allowed job |
+
+Health endpoints are deliberately outside `/api/v1`:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health/live` | Backend process liveness |
+| `GET` | `/health/ready` | MongoDB and Socket.IO readiness |
+| `GET` | `/health` | Expanded health with ML status and metrics |
+
+## Realtime Events And Background Jobs
+
+### Socket.IO
+
+Socket.IO connections must supply the JWT access token using
+`auth: { token: "<access-token>" }`, the `token` query parameter, or a bearer
+authorization header. The frontend uses the `auth` form.
+
+The backend emits live events including:
+
+- `connection-success`
+- `simulation-update`, `simulation-reset`, `simulation-toggle`, and
+  `simulation-speed-change`
+- `ecosystem-alerts` and `simulation-insights`
+- `prediction-update`
+- `system-event`, `system-metrics`, and `critical-alerts`
+
+### BullMQ jobs
+
+Redis powers the `background-tasks` queue. The worker accepts these job names:
+
+| Job | Purpose |
+| --- | --- |
+| `ml-training` | Build training input from stored simulation data and train the collapse model |
+| `prediction-generation` | Run collapse or forecast predictions asynchronously |
+| `alert-processing` | Store metrics and emit operational alerts |
+| `report-generation` | Generate and cache report summary data |
+| `event-cleanup` | Clean up expired metric/event records |
+
+The backend enqueues alert processing at startup and every minute, and cleanup
+every six hours. Queue management HTTP endpoints require an `admin` JWT role.
+
+## ML Service
+
+The Flask service can be addressed directly on port `8000`, although normal
+web clients call prediction routes through the Node backend.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Report model/service health |
+| `POST` | `/predict/collapse` | Run collapse-risk inference |
+| `POST` | `/predict/populations` | Run population forecasting |
+| `POST` | `/train/collapse` | Train and reload a collapse model |
+
+If saved model files are unavailable, the service contains fallback prediction
+logic. The Node layer may also use fallback behavior when a Python inference
+request cannot be completed.
+
+For additional microservice detail, see
+[`backend/ml-service/README.md`](backend/ml-service/README.md).
+
+## Health Checks And Monitoring
+
+The repository supplies a simple verification script:
+
+```bash
+BASE_URL=http://localhost:5000 ./scripts/healthcheck.sh
 ```
-MIT License
 
-Copyright (c) 2025 Gorav Gumber
+It checks `/health/live` and `/health/ready`. The expanded `/health` endpoint
+also checks the ML service and therefore can report degraded status if the
+prediction service is unavailable.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Retention rules implemented in MongoDB schemas:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+| Collection | Retention |
+| --- | --- |
+| Metrics | 7 days |
+| Events | 30 days |
+| Predictions | 90 days |
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+## Testing And Validation
+
+### Backend
+
+```bash
+cd backend
+npm ci
+npm run check
+npm test
 ```
 
----
+`npm run check` syntax-checks backend JavaScript files. The Node test suite
+currently includes utility and authorization middleware unit tests.
 
-## 🎯 Roadmap
+### Frontend
 
-### Phase 1: Advanced AI Features
-- [ ] Deep learning models with LSTM networks
-- [ ] Multi-species ecosystem modeling
-- [ ] Environmental factor simulation (weather, seasons)
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run build
+```
 
-### Phase 2: Collaboration Features
-- [ ] Multi-user simulation environments
-- [ ] Real-time collaboration tools
-- [ ] Shared ecosystem experiments
+### Compose configuration
 
-### Phase 3: Deployment & Scaling
-- [ ] Docker containerization
-- [ ] AWS/Azure cloud deployment
-- [ ] Kubernetes orchestration
-- [ ] CDN integration
+```bash
+docker compose config
+docker compose -f docker-compose.dev.yml config
+```
 
-### Phase 4: Mobile Application
-- [ ] React Native mobile app
-- [ ] Offline simulation capabilities
-- [ ] Push notifications for alerts
+The GitHub Actions workflow in `.github/workflows/backend-platform.yml` runs
+these backend, frontend, and Compose validations for pushes to `main` and for
+pull requests.
 
----
+## Deployment Notes
 
-## 🙏 Acknowledgments
+### Nginx
 
-- **React Team** for the amazing frontend framework
-- **MongoDB** for the flexible NoSQL database
-- **TensorFlow** team for making ML accessible in JavaScript
-- **Recharts** for beautiful data visualizations
-- **Open Source Community** for countless helpful libraries
+`infra/nginx/nginx.conf` provides reverse proxy routes for:
 
----
+- `/` to the frontend container
+- `/api` and `/health` to the backend container
+- `/socket.io/` to the backend with WebSocket upgrade headers
 
-## ⭐ Star History
+### systemd and Docker Compose
 
-If you found this project helpful, please consider giving it a ⭐ star on GitHub!
+`deployment/ecosystem-backend.service` manages a Compose installation expected
+at `/opt/adaptive-ecosystem-simulator`:
 
-[![Star History Chart](https://api.star-history.com/svg?repos=goravgumber/adaptive-ecosystem-simulator&type=Date)](https://star-history.com/#goravgumber/adaptive-ecosystem-simulator&Date)
+```bash
+sudo cp deployment/ecosystem-backend.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ecosystem-backend.service
+sudo systemctl status ecosystem-backend.service
+```
 
----
+Adapt the service `WorkingDirectory` if the repository is deployed elsewhere.
 
-**Built with ❤️ by Gorav Gumber | BTech CSE 3rd Year | 27 Days of Code**
+### Development Compose file
+
+`docker-compose.dev.yml` is useful for bringing up MongoDB and Redis during
+local development. Its backend/frontend hot-reload commands currently assume
+development dependencies and Node tooling are available in the final
+Dockerfile images, so the reliable hot-reload workflow is to run those two
+applications locally as described above.
+
+## Current Implementation Notes
+
+- Reports and the basic `/api/v1/monitor` endpoint are not currently protected
+  by authentication in the route implementations.
+- The monitor/metrics layer includes approximate active-user counts rather
+  than connected-session tracking.
+- A newly registered account has role `user`. Admin endpoints require a user
+  record with role `admin`.
+- Some routes return the standardized `{ success, data, message }` response
+  envelope, while earlier simulation/report routes return their payload
+  directly. The frontend handles both forms.
+- Simulation controls are designed for exploration; this is not a
+  scientifically calibrated ecosystem model.
+
+## Contributing
+
+1. Fork the repository and create a feature branch.
+2. Make focused changes and update documentation for user-visible behavior.
+3. Run the backend tests and frontend lint/build checks.
+4. Open a pull request describing behavior changes and verification performed.
+
+Additional project documentation:
+
+- [`docs/api.md`](docs/api.md)
+- [`docs/backend-platform.md`](docs/backend-platform.md)
+- [`backend/ml-service/README.md`](backend/ml-service/README.md)
+
+## License
+
+The backend package metadata declares the project as MIT licensed. A root
+`LICENSE` file is not currently included in this repository; add one before
+publishing or redistributing the project under that license.
