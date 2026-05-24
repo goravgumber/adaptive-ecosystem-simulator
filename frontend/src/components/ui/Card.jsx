@@ -1,49 +1,12 @@
-import React from "react";
-import clsx from "clsx";
-
-// Card container
-export function Card({ className, children, ...props }) {
+export default function Card({ header, title, padding = "p-4", children, className = "" }) {
   return (
-    <div
-      className={clsx(
-        "rounded-xl border border-gray-700 bg-gray-800 shadow-md overflow-hidden",
-        className
+    <div className={`bg-surface border border-border rounded-lg shadow-card card-hover ${padding} ${className}`}>
+      {(header || title) && (
+        <div className="border-b border-border pb-3 mb-3">
+          {title && <span className="text-text-secondary text-xs font-mono uppercase tracking-wider">{title}</span>}
+          {header}
+        </div>
       )}
-      {...props}
-    >
-      {children}
-    </div>
-  );
-}
-
-// Card header (optional)
-export function CardHeader({ className, children, ...props }) {
-  return (
-    <div
-      className={clsx("px-4 py-3 border-b border-gray-700", className)}
-      {...props}
-    >
-      {children}
-    </div>
-  );
-}
-
-// Card content
-export function CardContent({ className, children, ...props }) {
-  return (
-    <div className={clsx("p-4", className)} {...props}>
-      {children}
-    </div>
-  );
-}
-
-// Card footer (optional)
-export function CardFooter({ className, children, ...props }) {
-  return (
-    <div
-      className={clsx("px-4 py-3 border-t border-gray-700", className)}
-      {...props}
-    >
       {children}
     </div>
   );
