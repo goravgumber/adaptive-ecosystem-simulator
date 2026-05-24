@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Metric = require("../models/Metric");
 const Event = require("../models/Event");
 const Simulation = require("../models/Simulation");
+const logger = require("../config/logger");
 
 const startTime = Date.now();
 
@@ -10,7 +11,7 @@ const startTime = Date.now();
 const getSystemMetrics = async () => {
   const uptime = Math.floor((Date.now() - startTime) / 1000);
   const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
-  
+
   const memoryUsage = process.memoryUsage();
   const cpuLoad = parseFloat(os.loadavg()[0].toFixed(2));
   const freeMemory = os.freemem();
@@ -45,7 +46,7 @@ const logEvent = async (eventData) => {
     });
 
     await event.save();
-    
+
     // Emit real-time event if Socket.IO is available
     if (eventData.io) {
       eventData.io.emit('system-event', {
@@ -60,7 +61,7 @@ const logEvent = async (eventData) => {
 
     return event;
   } catch (err) {
-    console.error("❌ Error logging event:", err);
+    logger.error(" Error logging event: %s", err.message);
     throw err;
   }
 };
@@ -68,20 +69,20 @@ const logEvent = async (eventData) => {
 // Alert Generation
 const generateAlerts = async (metrics, userId = null) => {
   const alerts = [];
-  
+
   // System Alerts
   if (metrics.cpuLoad > 2.0) {
     alerts.push({
       type: "danger",
       category: "system",
-      message: `🚨 Critical CPU Load: ${metrics.cpuLoad} - System may be unresponsive`,
+      message: ` Critical CPU Load: ${metrics.cpuLoad} - System may be unresponsive`,
       severity: "critical"
     });
   } else if (metrics.cpuLoad > 1.5) {
     alerts.push({
       type: "warning",
-      category: "system", 
-      message: `⚠️ High CPU Load: ${metrics.cpuLoad} - Performance may be affected`,
+      category: "system",
+      message: ` High CPU Load: ${metrics.cpuLoad} - Performance may be affected`,
       severity: "warning"
     });
   }
@@ -90,14 +91,14 @@ const generateAlerts = async (metrics, userId = null) => {
     alerts.push({
       type: "danger",
       category: "system",
-      message: `🚨 Critical Memory Usage: ${metrics.memoryUsagePercent}% - System may crash`,
+      message: ` Critical Memory Usage: ${metrics.memoryUsagePercent}% - System may crash`,
       severity: "critical"
     });
   } else if (metrics.memoryUsagePercent > 80) {
     alerts.push({
       type: "warning",
       category: "system",
-      message: `⚠️ High Memory Usage: ${metrics.memoryUsagePercent}% - Consider optimization`,
+      message: ` High Memory Usage: ${metrics.memoryUsagePercent}% - Consider optimization`,
       severity: "warning"
     });
   }
@@ -107,7 +108,7 @@ const generateAlerts = async (metrics, userId = null) => {
     alerts.push({
       type: "danger",
       category: "database",
-      message: "🚨 Database Connection Lost - Data operations will fail",
+      message: " Database Connection Lost - Data operations will fail",
       severity: "critical"
     });
   }
@@ -123,7 +124,7 @@ const generateAlerts = async (metrics, userId = null) => {
       alerts.push({
         type: "warning",
         category: "application",
-        message: `⚠️ High Simulation Activity: ${recentSimulations} runs in 24h - Monitor resource usage`,
+        message: ` High Simulation Activity: ${recentSimulations} runs in 24h - Monitor resource usage`,
         severity: "warning"
       });
     }
@@ -144,10 +145,10 @@ const monitorEcosystemHealth = async (simulationData) => {
     alerts.push({
       type: "danger",
       category: "ecosystem",
-      message: "🌱 Critical: Plant population near extinction (< 10)",
+      message: " Critical: Plant population near extinction (< 10)",
       severity: "critical"
     });
-    
+
     events.push({
       type: "ecosystem_alert",
       category: "population",
@@ -158,12 +159,12 @@ const monitorEcosystemHealth = async (simulationData) => {
 
   if (herbivores === 0) {
     alerts.push({
-      type: "danger", 
+      type: "danger",
       category: "ecosystem",
-      message: "🐇 Critical: All herbivores extinct - Ecosystem collapse",
+      message: " Critical: All herbivores extinct - Ecosystem collapse",
       severity: "critical"
     });
-    
+
     events.push({
       type: "ecosystem_collapse",
       category: "extinction",
@@ -176,8 +177,8 @@ const monitorEcosystemHealth = async (simulationData) => {
   if (carnivores > herbivores * 2 && herbivores > 0) {
     alerts.push({
       type: "warning",
-      category: "ecosystem", 
-      message: `🦁 Warning: Predator overload (${carnivores} carnivores vs ${herbivores} herbivores)`,
+      category: "ecosystem",
+      message: ` Warning: Predator overload (${carnivores} carnivores vs ${herbivores} herbivores)`,
       severity: "warning"
     });
   }
@@ -187,8 +188,8 @@ const monitorEcosystemHealth = async (simulationData) => {
     alerts.push({
       type: "info",
       category: "ecosystem",
-      message: "🌿 Ecosystem thriving - All populations stable and healthy",
-      severity: "info"  
+      message: " Ecosystem thriving - All populations stable and healthy",
+      severity: "info"
     });
   }
 
@@ -198,7 +199,7 @@ const monitorEcosystemHealth = async (simulationData) => {
 // Performance Monitoring
 const monitorPerformance = async () => {
   const metrics = await getSystemMetrics();
-  
+
   // Store performance metrics
   const performanceMetric = new Metric({
     timestamp: new Date(),
@@ -222,10 +223,10 @@ const monitorPerformance = async () => {
   });
 
   await performanceMetric.save();
-  
+
   // Generate alerts
   const alerts = await generateAlerts(metrics);
-  
+
   // Log significant events
   if (alerts.length > 0) {
     for (const alert of alerts) {
@@ -247,16 +248,16 @@ const cleanupOldData = async () => {
   try {
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    
+
     // Cleanup old metrics (keep 7 days)
-    const deletedMetrics = await Metric.deleteMany({ 
-      timestamp: { $lt: weekAgo } 
+    const deletedMetrics = await Metric.deleteMany({
+      timestamp: { $lt: weekAgo }
     });
-    
+
     // Cleanup old events (keep 30 days for audit trail)
     const monthAgo = new Date();
     monthAgo.setDate(monthAgo.getDate() - 30);
-    
+
     const deletedEvents = await Event.deleteMany({
       timestamp: { $lt: monthAgo }
     });
@@ -266,7 +267,7 @@ const cleanupOldData = async () => {
       deletedEvents: deletedEvents.deletedCount
     };
   } catch (err) {
-    console.error("❌ Error during cleanup:", err);
+    logger.error(" Error during cleanup: %s", err.message);
     throw err;
   }
 };
@@ -276,7 +277,7 @@ const getSystemStatus = async () => {
   try {
     const metrics = await getSystemMetrics();
     const alerts = await generateAlerts(metrics);
-    
+
     // Get recent events
     const recentEvents = await Event.find()
       .sort({ timestamp: -1 })
@@ -285,9 +286,9 @@ const getSystemStatus = async () => {
 
     // Get database stats
     const dbStats = await mongoose.connection.db.stats();
-    
+
     return {
-      status: alerts.some(a => a.severity === 'critical') ? 'critical' : 
+      status: alerts.some(a => a.severity === 'critical') ? 'critical' :
               alerts.some(a => a.severity === 'warning') ? 'warning' : 'healthy',
       metrics,
       alerts,
@@ -301,7 +302,7 @@ const getSystemStatus = async () => {
       lastChecked: new Date().toISOString()
     };
   } catch (err) {
-    console.error("❌ Error getting system status:", err);
+    logger.error(" Error getting system status: %s", err.message);
     throw err;
   }
 };

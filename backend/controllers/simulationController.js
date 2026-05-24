@@ -1,4 +1,5 @@
 const Simulation = require("../models/Simulation");
+const logger = require("../config/logger");
 
 let isRunning = true;
 let speed = 1000;
@@ -7,24 +8,24 @@ const generateEvents = ({ plants, herbivores, carnivores }) => {
   const events = [];
 
   if (plants < 20) {
-    events.push({ message: "🌱 Plants are critically low", severity: "critical" });
+    events.push({ message: " Plants are critically low", severity: "critical" });
   }
   if (herbivores < 5) {
-    events.push({ message: "🐇 Herbivore population near extinction", severity: "critical" });
+    events.push({ message: " Herbivore population near extinction", severity: "critical" });
   }
   if (carnivores > herbivores * 2) {
-    events.push({ message: "🦁 Carnivores overpopulated relative to herbivores", severity: "warning" });
+    events.push({ message: " Carnivores overpopulated relative to herbivores", severity: "warning" });
   }
   if (plants > 200 && herbivores > 50) {
-    events.push({ message: "🌿 Ecosystem is thriving with balance", severity: "info" });
+    events.push({ message: " Ecosystem is thriving with balance", severity: "info" });
   }
 
   const randomEvents = [
-    { message: "New plant growth detected 🌿", severity: "info" },
-    { message: "Herbivore consumed a plant 🌱", severity: "info" },
-    { message: "Carnivore hunted a herbivore 🐇", severity: "warning" },
-    { message: "Population stabilized 🧬", severity: "info" },
-    { message: "Carnivore spotted in territory 🦊", severity: "info" },
+    { message: "New plant growth detected ", severity: "info" },
+    { message: "Herbivore consumed a plant ", severity: "info" },
+    { message: "Carnivore hunted a herbivore ", severity: "warning" },
+    { message: "Population stabilized ", severity: "info" },
+    { message: "Carnivore spotted in territory ", severity: "info" },
   ];
   events.push(randomEvents[Math.floor(Math.random() * randomEvents.length)]);
 
@@ -70,9 +71,9 @@ const saveSimulation = async (req, res) => {
       });
     }
 
-    res.status(201).json({ message: "✅ Simulation step saved", simulation });
+    res.status(201).json({ message: " Simulation step saved", simulation });
   } catch (err) {
-    console.error("❌ Simulation save error:", err);
+    logger.error(" Simulation save error: %s", err.message);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -94,16 +95,16 @@ const resetSimulation = async (req, res) => {
 
     res.json({ message: "Simulation reset for user", isRunning });
   } catch (err) {
-    console.error("❌ Simulation reset error:", err);
+    logger.error(" Simulation reset error: %s", err.message);
     res.status(500).json({ error: "Server error" });
   }
 };
 
 const toggleSimulation = (req, res) => {
   isRunning = !isRunning;
-  
+
   const responseData = {
-    message: isRunning ? "▶️ Simulation resumed" : "⏸ Simulation paused",
+    message: isRunning ? " Simulation resumed" : " Simulation paused",
     isRunning,
   };
 
@@ -122,14 +123,14 @@ const toggleSimulation = (req, res) => {
 const setSpeed = (req, res) => {
   // Fixed: Changed from newSpeed to speed to match frontend
   const { speed: newSpeed } = req.body;
-  
+
   if (!newSpeed || newSpeed < 100) {
     return res.status(400).json({ error: "Speed must be >= 100ms" });
   }
-  
+
   speed = newSpeed;
 
-  const responseData = { message: "⚡ Simulation speed updated", speed };
+  const responseData = { message: " Simulation speed updated", speed };
 
   // Emit speed change event if Socket.IO is available
   if (req.io) {

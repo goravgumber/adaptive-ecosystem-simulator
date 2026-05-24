@@ -7,6 +7,7 @@ const authMiddleware = require("../middleware/auth");
 // Models for storing metrics
 const Metric = require("../models/Metric");
 const Event = require("../models/Event");
+const logger = require("../config/logger");
 
 const startTime = Date.now();
 
@@ -18,7 +19,7 @@ router.get("/", authMiddleware, async (req, res) => {
   try {
     const uptime = Math.floor((Date.now() - startTime) / 1000);
     const dbStatus = mongoose.connection.readyState === 1 ? "Connected" : "Disconnected";
-    
+
     const memoryUsage = process.memoryUsage();
     const cpuLoad = parseFloat(os.loadavg()[0].toFixed(2));
     const freeMemory = os.freemem();
@@ -27,7 +28,7 @@ router.get("/", authMiddleware, async (req, res) => {
 
     // Get active user sessions (mock for now, you can enhance this)
     const activeUsers = await getUserSessions();
-    
+
     // Database stats
     const dbStats = await getDatabaseStats();
 
@@ -72,11 +73,11 @@ router.get("/", authMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Error fetching metrics:", err);
-    res.status(500).json({ 
-      success: false, 
+    logger.error(" Error fetching metrics: %s", err.message);
+    res.status(500).json({
+      success: false,
       error: "Failed to fetch system metrics",
-      message: err.message 
+      message: err.message
     });
   }
 });
@@ -89,7 +90,7 @@ router.get("/history", authMiddleware, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const hours = parseInt(req.query.hours) || 24;
-    
+
     const startDate = new Date();
     startDate.setHours(startDate.getHours() - hours);
 
@@ -108,10 +109,10 @@ router.get("/history", authMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Error fetching metrics history:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Failed to fetch metrics history" 
+    logger.error(" Error fetching metrics history: %s", err.message);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch metrics history"
     });
   }
 });
@@ -149,10 +150,10 @@ router.get("/realtime", authMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Error fetching realtime metrics:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Failed to fetch realtime metrics" 
+    logger.error(" Error fetching realtime metrics: %s", err.message);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch realtime metrics"
     });
   }
 });
@@ -168,7 +169,7 @@ async function getDatabaseStats() {
   try {
     const collections = await mongoose.connection.db.listCollections().toArray();
     const dbStats = await mongoose.connection.db.stats();
-    
+
     return {
       collections: collections.length,
       dataSize: (dbStats.dataSize / 1024 / 1024).toFixed(2) + " MB",
@@ -177,7 +178,7 @@ async function getDatabaseStats() {
       documents: dbStats.objects || 0
     };
   } catch (err) {
-    console.error("Database stats error:", err);
+    logger.error("Database stats error: %s", err.message);
     return {
       collections: 0,
       dataSize: "0 MB",
@@ -190,21 +191,21 @@ async function getDatabaseStats() {
 
 async function generateAlerts(cpuLoad, memoryPercent, dbStatus, activeUsers) {
   const alerts = [];
-  
+
   // CPU Alerts
   if (cpuLoad > 2.0) {
     alerts.push({
       type: "danger",
       category: "system",
-      message: `🚨 High CPU Load: ${cpuLoad} (Critical threshold exceeded)`,
+      message: ` High CPU Load: ${cpuLoad} (Critical threshold exceeded)`,
       severity: "critical",
       timestamp: new Date()
     });
   } else if (cpuLoad > 1.5) {
     alerts.push({
-      type: "warning", 
+      type: "warning",
       category: "system",
-      message: `⚠️ Elevated CPU Load: ${cpuLoad} (Monitor closely)`,
+      message: ` Elevated CPU Load: ${cpuLoad} (Monitor closely)`,
       severity: "warning",
       timestamp: new Date()
     });
@@ -214,8 +215,8 @@ async function generateAlerts(cpuLoad, memoryPercent, dbStatus, activeUsers) {
   if (memoryPercent > 85) {
     alerts.push({
       type: "danger",
-      category: "system", 
-      message: `🚨 High Memory Usage: ${memoryPercent}% (Critical level)`,
+      category: "system",
+      message: ` High Memory Usage: ${memoryPercent}% (Critical level)`,
       severity: "critical",
       timestamp: new Date()
     });
@@ -223,8 +224,8 @@ async function generateAlerts(cpuLoad, memoryPercent, dbStatus, activeUsers) {
     alerts.push({
       type: "warning",
       category: "system",
-      message: `⚠️ High Memory Usage: ${memoryPercent}% (Consider cleanup)`,
-      severity: "warning", 
+      message: ` High Memory Usage: ${memoryPercent}% (Consider cleanup)`,
+      severity: "warning",
       timestamp: new Date()
     });
   }
@@ -234,7 +235,7 @@ async function generateAlerts(cpuLoad, memoryPercent, dbStatus, activeUsers) {
     alerts.push({
       type: "danger",
       category: "database",
-      message: "🚨 Database Connection Lost - Immediate attention required!",
+      message: " Database Connection Lost - Immediate attention required!",
       severity: "critical",
       timestamp: new Date()
     });
@@ -245,7 +246,7 @@ async function generateAlerts(cpuLoad, memoryPercent, dbStatus, activeUsers) {
     alerts.push({
       type: "info",
       category: "traffic",
-      message: `📈 High User Activity: ${activeUsers} active users (Scale resources if needed)`,
+      message: ` High User Activity: ${activeUsers} active users (Scale resources if needed)`,
       severity: "info",
       timestamp: new Date()
     });
@@ -263,16 +264,16 @@ async function storeMetrics(metrics) {
       application: metrics.application,
       alerts: metrics.alerts
     });
-    
+
     await metric.save();
-    
+
     // Cleanup old metrics (keep only last 7 days)
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
     await Metric.deleteMany({ timestamp: { $lt: weekAgo } });
-    
+
   } catch (err) {
-    console.error("❌ Error storing metrics:", err);
+    logger.error(" Error storing metrics: %s", err.message);
   }
 }
 

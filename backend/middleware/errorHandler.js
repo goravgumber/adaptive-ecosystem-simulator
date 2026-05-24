@@ -1,5 +1,7 @@
 const AppError = require("./AppError");
 const logger = require("../utils/logger");
+const { sendError } = require("../utils/responseFormatter");
+const errorCodes = require("../utils/errorCodes");
 
 const notFoundHandler = (req, res, next) => {
   next(new AppError(`Cannot find ${req.originalUrl} on this server`, 404));
@@ -7,29 +9,35 @@ const notFoundHandler = (req, res, next) => {
 
 const errorHandler = (err, req, res, next) => {
   const statusCode = err.statusCode || 500;
-  const status = err.status || "error";
+  const message = err.message || "An unexpected error occurred";
+  const details = err.details || null;
+  const traceId = req.traceId || undefined;
 
-  const response = {
-    status,
-    message: err.message || "An unexpected error occurred",
-  };
+  let errorCode = errorCodes.INTERNAL_ERROR;
+  if (statusCode === 400) errorCode = errorCodes.BAD_REQUEST;
+  else if (statusCode === 401) errorCode = errorCodes.UNAUTHORIZED;
+  else if (statusCode === 403) errorCode = errorCodes.FORBIDDEN;
+  else if (statusCode === 404) errorCode = errorCodes.NOT_FOUND;
+  else if (statusCode === 409) errorCode = errorCodes.CONFLICT;
 
-  if (err.details) {
-    response.details = err.details;
+  if (err.message && err.message.includes("Validation failed")) {
+    errorCode = errorCodes.VALIDATION_ERROR;
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    response.stack = err.stack;
-    response.name = err.name;
-  }
-
-  logger.error("%s %s %s %o", req.method, req.originalUrl, err.message, {
+  logger.error("%s %s %s [TraceId: %s] %o", req.method, req.originalUrl, message, traceId, {
     statusCode,
+    errorCode,
     stack: err.stack,
-    details: err.details,
+    details,
   });
 
-  res.status(statusCode).json(response);
+  const responseDetails = process.env.NODE_ENV !== "production" ? {
+    stack: err.stack,
+    name: err.name,
+    ...(details ? { validationErrors: details } : {})
+  } : details;
+
+  sendError(res, message, statusCode, errorCode, responseDetails);
 };
 
 module.exports = {

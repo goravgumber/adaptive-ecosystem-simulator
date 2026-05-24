@@ -7,11 +7,11 @@ const startTime = Date.now();
 
 router.get("/", async (req, res) => {
   try {
-    const uptime = Math.floor((Date.now() - startTime) / 1000); 
-    const dbStatus = mongoose.connection.readyState === 1 ? "Connected ✅" : "Disconnected ❌";
+    const uptime = Math.floor((Date.now() - startTime) / 1000);
+    const dbStatus = mongoose.connection.readyState === 1 ? "Connected " : "Disconnected ";
 
     const memoryUsage = process.memoryUsage();
-    const cpuLoad = os.loadavg()[0].toFixed(2); 
+    const cpuLoad = os.loadavg()[0].toFixed(2);
 
     const activeUsers = Math.floor(Math.random() * 10) + 1;
 

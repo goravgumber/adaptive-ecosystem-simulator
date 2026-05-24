@@ -6,15 +6,18 @@ const mongoSanitize = require("express-mongo-sanitize");
 const xssClean = require("xss-clean");
 const helmet = require("helmet");
 const compression = require("compression");
-const morgan = require("morgan");
 const http = require("http");
 const { Server } = require("socket.io");
 const swaggerUi = require("swagger-ui-express");
 
+require("./middleware/autoAsyncRouter");
 const config = require("./config/env");
-const logger = require("./utils/logger");
+const logger = require("./config/logger");
+const requestLogger = require("./middleware/requestLogger");
 const socketAuth = require("./sockets/socketAuth");
 const { notFoundHandler, errorHandler } = require("./middleware/errorHandler");
+const { startWorkers, stopWorkers } = require("./workers");
+const { addJob } = require("./queues");
 
 const authRoutes = require("./routes/auth");
 const simulationRoutesFactory = require("./routes/simulation");
@@ -26,11 +29,14 @@ const alertsRoutesFactory = require("./routes/alerts");
 const metricsRoutes = require("./routes/metrics");
 const eventsRoutes = require("./routes/events");
 const predictionsRoutes = require("./routes/Predictions");
+const queuesRoutes = require("./routes/queues");
+const adminRoutes = require("./routes/admin");
 const healthRoutes = require("./routes/health");
 const swaggerSpec = require("./docs/swaggerSpec");
 
 const app = express();
 const server = http.createServer(app);
+let isShuttingDown = false;
 const io = new Server(server, {
   cors: {
     origin: config.NODE_ENV === "production" ? config.FRONTEND_URL : true,
@@ -39,6 +45,12 @@ const io = new Server(server, {
   },
 });
 
+const traceMiddleware = require("./middleware/traceMiddleware");
+const RedisStore = require("rate-limit-redis").default;
+const redisClient = require("./config/redis");
+
+app.use(requestLogger);
+app.use(traceMiddleware);
 app.disable("x-powered-by");
 
 const apiLimiter = rateLimit({
@@ -46,6 +58,9 @@ const apiLimiter = rateLimit({
   max: config.RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
+  store: redisClient ? new RedisStore({
+    sendCommand: (...args) => redisClient.call(...args),
+  }) : undefined,
   message: {
     status: "fail",
     message: "Too many requests from this IP, please try again later.",
@@ -60,7 +75,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(mongoSanitize());
 app.use(xssClean());
 app.use(compression());
-app.use(morgan("combined", { stream: logger.stream }));
 
 app.set("io", io);
 io.use(socketAuth);
@@ -80,56 +94,43 @@ const initializeAIService = async () => {
 };
 
 const startBackgroundMonitoring = () => {
-  const { monitorPerformance, cleanupOldData } = require("./controllers/monitoringController");
+  // Queue alert-processing immediately on startup, then every 60s
+  addJob("background-tasks", "alert-processing", {}).catch((err) => {
+    logger.error("Failed to queue initial alert processing: %s", err.message);
+  });
 
-  setInterval(async () => {
-    try {
-      const { metrics, alerts } = await monitorPerformance();
-      io.emit("system-metrics", { metrics, alerts, timestamp: new Date() });
-      const criticalAlerts = alerts.filter((alert) => alert.severity === "critical");
-      if (criticalAlerts.length > 0) {
-        io.emit("critical-alerts", criticalAlerts);
-      }
-    } catch (error) {
-      logger.error("Background monitoring error", error);
-    }
+  setInterval(() => {
+    addJob("background-tasks", "alert-processing", {}).catch((err) => {
+      logger.error("Failed to queue alert processing: %s", err.message);
+    });
   }, 60 * 1000);
 
-  setInterval(async () => {
-    try {
-      const cleanupResult = await cleanupOldData();
-      logger.info("Data cleanup completed", cleanupResult);
-    } catch (error) {
-      logger.error("Data cleanup error", error);
-    }
+  setInterval(() => {
+    addJob("background-tasks", "event-cleanup", {}).catch((err) => {
+      logger.error("Failed to queue data cleanup: %s", err.message);
+    });
   }, 6 * 60 * 60 * 1000);
-
-  setInterval(async () => {
-    try {
-      logger.info("Scheduled AI retraining evaluation started");
-      const Simulation = require("./models/Simulation");
-      const recentData = await Simulation.find().sort({ createdAt: -1 }).limit(1000).lean();
-      if (recentData.length >= 100) {
-        logger.info("AI retraining data ready", { records: recentData.length });
-      }
-    } catch (error) {
-      logger.error("AI retraining error", error);
-    }
-  }, 24 * 60 * 60 * 1000);
 };
 
 const configureRoutes = () => {
-  app.use("/api/auth", authRoutes);
-  app.use("/api/simulation", simulationRoutesFactory(io));
-  app.use("/api/dashboard", dashboardRoutes);
-  app.use("/api/logs", logRoutes);
-  app.use("/api/reports", reportsRoutes);
-  app.use("/api/monitor", monitorRoutes);
-  app.use("/api/alerts", alertsRoutesFactory(io));
-  app.use("/api/metrics", metricsRoutes);
-  app.use("/api/events", eventsRoutes);
-  app.use("/api/predictions", predictionsRoutes);
+  const apiRouter = express.Router();
+
+  apiRouter.use("/auth", authRoutes);
+  apiRouter.use("/simulation", simulationRoutesFactory(io));
+  apiRouter.use("/dashboard", dashboardRoutes);
+  apiRouter.use("/logs", logRoutes);
+  apiRouter.use("/reports", reportsRoutes);
+  apiRouter.use("/monitor", monitorRoutes);
+  apiRouter.use("/alerts", alertsRoutesFactory(io));
+  apiRouter.use("/metrics", metricsRoutes);
+  apiRouter.use("/events", eventsRoutes);
+  apiRouter.use("/predictions", predictionsRoutes);
+  apiRouter.use("/queues", queuesRoutes);
+  apiRouter.use("/admin", adminRoutes);
+
   app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+  app.use("/api/v1", apiRouter);
+  app.use("/api", apiRouter);
   app.use("/health", healthRoutes);
 
   app.get("/", (req, res) => {
@@ -151,6 +152,10 @@ const startServer = async () => {
     await mongoose.connect(config.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     logger.info("MongoDB connected");
     await initializeAIService();
+
+    // Start BullMQ workers
+    startWorkers(io);
+
     startBackgroundMonitoring();
     configureRoutes();
 
@@ -183,6 +188,33 @@ const startServer = async () => {
   }
 };
 
+const shutdown = async (signal) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  try {
+    logger.info("Shutdown initiated", { signal });
+    await stopWorkers();
+    if (redisClient && redisClient.status !== "end") {
+      await redisClient.quit();
+      logger.info("Redis client closed");
+    }
+    await mongoose.disconnect();
+    logger.info("MongoDB disconnected");
+
+    server.close(() => {
+      logger.info("HTTP server closed");
+      process.exit(0);
+    });
+  } catch (error) {
+    logger.error("Shutdown error", error);
+    process.exit(1);
+  }
+};
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+
 process.on("unhandledRejection", (reason) => {
   logger.error("Unhandled rejection detected", reason);
   process.exit(1);
@@ -193,6 +225,8 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
 
-module.exports = { app, server, io };
+module.exports = { app, server, io, startServer, shutdown };

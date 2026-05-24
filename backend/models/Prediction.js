@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const logger = require("../config/logger");
 
 const predictionSchema = new mongoose.Schema({
   userId: {
@@ -91,7 +92,7 @@ predictionSchema.virtual('confidencePercentage').get(function() {
 // Virtual for risk level (for collapse predictions)
 predictionSchema.virtual('riskLevel').get(function() {
   if (this.type !== 'collapse') return null;
-  
+
   const risk = this.output.collapseRisk || this.output.risk || 0;
   if (risk > 0.8) return 'critical';
   if (risk > 0.6) return 'high';
@@ -111,8 +112,8 @@ predictionSchema.statics.getLatestByType = function(userId, type, limit = 10) {
 // Static method to get predictions accuracy stats
 predictionSchema.statics.getAccuracyStats = async function(userId, type) {
   const stats = await this.aggregate([
-    { 
-      $match: { 
+    {
+      $match: {
         userId: new mongoose.Types.ObjectId(userId),
         type: type,
         accuracy: { $exists: true, $ne: null }
@@ -127,12 +128,12 @@ predictionSchema.statics.getAccuracyStats = async function(userId, type) {
           $sum: { $cond: [{ $gte: ['$accuracy', 0.8] }, 1, 0] }
         },
         mediumAccuracy: {
-          $sum: { 
+          $sum: {
             $cond: [
-              { $and: [{ $gte: ['$accuracy', 0.6] }, { $lt: ['$accuracy', 0.8] }] }, 
-              1, 
+              { $and: [{ $gte: ['$accuracy', 0.6] }, { $lt: ['$accuracy', 0.8] }] },
+              1,
               0
-            ] 
+            ]
           }
         },
         lowAccuracy: {
@@ -212,22 +213,22 @@ predictionSchema.methods.evaluateAccuracy = async function(actualOutcome) {
         // For forecasts, calculate RMSE between predicted and actual values
         const predictions = this.output.predictions;
         const actuals = actualOutcome.actualValues;
-        
+
         if (predictions && actuals && predictions.length === actuals.length) {
           let mse = 0;
           let totalValues = 0;
-          
+
           for (let i = 0; i < predictions.length; i++) {
             const pred = predictions[i];
             const actual = actuals[i];
-            
+
             // Calculate MSE for each population type
             mse += Math.pow(pred.plants - actual.plants, 2);
             mse += Math.pow(pred.herbivores - actual.herbivores, 2);
             mse += Math.pow(pred.carnivores - actual.carnivores, 2);
             totalValues += 3;
           }
-          
+
           const rmse = Math.sqrt(mse / totalValues);
           const maxPopulation = 200; // Normalize by max expected population
           accuracy = Math.max(0, 1 - (rmse / maxPopulation));
@@ -246,11 +247,11 @@ predictionSchema.methods.evaluateAccuracy = async function(actualOutcome) {
     this.accuracy = Math.max(0, Math.min(1, accuracy));
     this.actualOutcome = actualOutcome;
     this.evaluatedAt = new Date();
-    
+
     return await this.save();
 
   } catch (error) {
-    console.error('Error evaluating prediction accuracy:', error);
+    logger.error('Error evaluating prediction accuracy: %s', error.message);
     throw error;
   }
 };
@@ -270,12 +271,12 @@ predictionSchema.methods.getSummary = function() {
       summary.riskLevel = this.riskLevel;
       summary.collapseRisk = Math.round((this.output.collapseRisk || 0) * 100);
       break;
-    
+
     case 'forecast':
       summary.stepsAhead = this.stepsAhead;
       summary.trends = this.output.trends;
       break;
-    
+
     case 'recommendations':
       summary.actionCount = this.output.actions ? this.output.actions.length : 0;
       break;
@@ -310,7 +311,7 @@ predictionSchema.post('save', function() {
   // Emit high-confidence predictions as events
   if (this.confidence >= 0.8 && this.type === 'collapse') {
     const Event = require('./Event');
-    
+
     Event.create({
       type: 'prediction',
       category: 'ecosystem',
@@ -322,7 +323,7 @@ predictionSchema.post('save', function() {
         confidence: this.confidence,
         stepsAhead: this.stepsAhead
       }
-    }).catch(err => console.error('Error creating prediction event:', err));
+    }).catch(err => logger.error('Error creating prediction event: %s', err.message));
   }
 });
 

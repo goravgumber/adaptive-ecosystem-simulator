@@ -8,6 +8,7 @@ from flask_cors import CORS
 from config.settings import settings
 from services.monitoring_service import MonitoringService
 from services.prediction_service import PredictionService
+from services.training_service import TrainingService
 from utils.logger import logger
 from utils.validators import validate_forecast_request, validate_predict_collapse_request
 
@@ -15,6 +16,7 @@ app = Flask(__name__)
 CORS(app)
 
 prediction_service = PredictionService()
+training_service = TrainingService()
 monitoring_service = MonitoringService(prediction_service)
 
 
@@ -44,6 +46,21 @@ def forecast_populations():
         return jsonify(result), 200 if result.get('success') else 400
     except Exception as exc:
         logger.error('Population forecast request failed: %s', exc, exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 400
+
+
+@app.route('/train/collapse', methods=['POST'])
+def train_collapse():
+    try:
+        payload = request.get_json(force=True)
+        training_data = payload.get('trainingData', [])
+        result = training_service.train_collapse_predictor(training_data)
+        if result.get('success'):
+            prediction_service.load_model("collapse")
+            return jsonify(result), 200
+        return jsonify(result), 400
+    except Exception as exc:
+        logger.error('Collapse model training request failed: %s', exc, exc_info=True)
         return jsonify({'success': False, 'error': str(exc)}), 400
 
 

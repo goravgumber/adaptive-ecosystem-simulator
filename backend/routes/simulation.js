@@ -1,5 +1,8 @@
 const express = require("express");
+const { body } = require("express-validator");
 const authMiddleware = require("../middleware/auth");
+const { simulationStatusCache, invalidateSimCache } = require("../middleware/simulationCache");
+const { validate } = require("../middleware/validate");
 const {
   saveSimulation,
   resetSimulation,
@@ -8,6 +11,12 @@ const {
   getSimulationStatus,
 } = require("../controllers/simulationController");
 const Simulation = require("../models/Simulation");
+const logger = require("../config/logger");
+const snapshotValidation = validate([
+  body("plants").optional().isFloat({ min: 1 }).withMessage("plants must be at least 1"),
+  body("herbivores").optional().isFloat({ min: 1 }).withMessage("herbivores must be at least 1"),
+  body("carnivores").optional().isFloat({ min: 1 }).withMessage("carnivores must be at least 1"),
+]);
 
 // Factory function that accepts Socket.IO instance
 const simulationRoutesFactory = (io) => {
@@ -17,7 +26,7 @@ const simulationRoutesFactory = (io) => {
    * @desc Save current simulation step
    * @route POST /api/simulation
    */
-  router.post("/", authMiddleware, (req, res, next) => {
+  router.post("/", authMiddleware, snapshotValidation, (req, res, next) => {
     // Add io to request object so controllers can access it
     req.io = io;
     saveSimulation(req, res, next);
@@ -27,7 +36,8 @@ const simulationRoutesFactory = (io) => {
    * @desc Reset simulation to initial state
    * @route DELETE /api/simulation/reset
    */
-  router.delete("/reset", authMiddleware, (req, res, next) => {
+  router.delete("/reset", authMiddleware, async (req, res, next) => {
+    await invalidateSimCache();
     req.io = io;
     resetSimulation(req, res, next);
   });
@@ -36,7 +46,8 @@ const simulationRoutesFactory = (io) => {
    * @desc Start/Pause simulation
    * @route POST /api/simulation/toggle
    */
-  router.post("/toggle", authMiddleware, (req, res, next) => {
+  router.post("/toggle", authMiddleware, async (req, res, next) => {
+    await invalidateSimCache();
     req.io = io;
     toggleSimulation(req, res, next);
   });
@@ -45,7 +56,8 @@ const simulationRoutesFactory = (io) => {
    * @desc Adjust simulation speed
    * @route POST /api/simulation/speed
    */
-  router.post("/speed", authMiddleware, (req, res, next) => {
+  router.post("/speed", authMiddleware, async (req, res, next) => {
+    await invalidateSimCache();
     req.io = io;
     setSpeed(req, res, next);
   });
@@ -62,7 +74,7 @@ const simulationRoutesFactory = (io) => {
       }
       res.json(latest);
     } catch (err) {
-      console.error("❌ Error fetching current simulation state:", err);
+      logger.error(" Error fetching current simulation state: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });
@@ -76,7 +88,7 @@ const simulationRoutesFactory = (io) => {
       const deleted = await Simulation.deleteMany({ userId: req.user.id });
       res.json({ message: "Simulation history cleared", deletedCount: deleted.deletedCount });
     } catch (err) {
-      console.error("❌ Error clearing simulation history:", err);
+      logger.error(" Error clearing simulation history: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });
@@ -85,7 +97,7 @@ const simulationRoutesFactory = (io) => {
    * @desc Get live simulation status
    * @route GET /api/simulation/status
    */
-  router.get("/status", authMiddleware, (req, res, next) => {
+  router.get("/status", authMiddleware, simulationStatusCache, (req, res, next) => {
     req.io = io;
     getSimulationStatus(req, res, next);
   });
@@ -103,7 +115,7 @@ const simulationRoutesFactory = (io) => {
 
       res.json(logs);
     } catch (err) {
-      console.error("❌ Error fetching simulation logs:", err);
+      logger.error(" Error fetching simulation logs: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });
@@ -124,7 +136,7 @@ const simulationRoutesFactory = (io) => {
 
       res.json(history);
     } catch (err) {
-      console.error("❌ Error fetching simulation history:", err);
+      logger.error(" Error fetching simulation history: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });
@@ -144,10 +156,10 @@ const simulationRoutesFactory = (io) => {
       const { plants, herbivores, carnivores } = latest;
       const insights = [];
 
-      if (plants < 20) insights.push("🌱 Plants are critically low, herbivores may starve soon.");
-      if (herbivores < 5) insights.push("🐇 Herbivore population near extinction.");
-      if (carnivores > herbivores * 2) insights.push("🦊 Too many carnivores compared to herbivores.");
-      if (plants > 200 && herbivores > 50) insights.push("🌿 Ecosystem is thriving with healthy balance!");
+      if (plants < 20) insights.push(" Plants are critically low, herbivores may starve soon.");
+      if (herbivores < 5) insights.push(" Herbivore population near extinction.");
+      if (carnivores > herbivores * 2) insights.push(" Too many carnivores compared to herbivores.");
+      if (plants > 200 && herbivores > 50) insights.push(" Ecosystem is thriving with healthy balance!");
 
       const responseData = {
         step: latest.step,
@@ -161,7 +173,7 @@ const simulationRoutesFactory = (io) => {
 
       res.json(responseData);
     } catch (err) {
-      console.error("❌ Error generating insights:", err);
+      logger.error(" Error generating insights: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });

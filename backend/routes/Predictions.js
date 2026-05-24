@@ -1,521 +1,352 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const authMiddleware = require("../middleware/auth");
-const aiService = require("../services/aiService");
-const Prediction = require("../models/Prediction");
+const validateRequest = require("../middleware/validateRequest");
+const { stepsSchema, emptyBodySchema } = require("../validators/predictionValidator");
+const predictionService = require("../services/predictionService");
+const { sendSuccess } = require("../utils/responseFormatter");
 const { logEvent } = require("../controllers/monitoringController");
+const Prediction = require("../models/Prediction");
+const { addJob } = require("../queues");
+const AppError = require("../middleware/AppError");
 
-/**
- * @desc Get ecosystem collapse prediction
- * @route POST /api/predictions/collapse
- */
-router.post("/collapse", authMiddleware, async (req, res) => {
-  try {
+const emitPredictionUpdate = (io, userId, payload) => {
+  if (!io) return;
+  io.to(`user-${userId}`).emit("prediction-update", payload);
+};
+
+const buildPredictionSummary = (prediction) => ({
+  id: prediction._id,
+  type: prediction.type,
+  confidence: Math.round((prediction.confidence || 0) * 100),
+  ageInHours: prediction.timestamp ? Math.floor((new Date() - prediction.timestamp) / (1000 * 60 * 60)) : 0,
+  accuracy: prediction.accuracy !== undefined ? Math.round(prediction.accuracy * 100) : null,
+});
+
+router.post(
+  "/collapse",
+  authMiddleware,
+  validateRequest(stepsSchema),
+  async (req, res) => {
     const userId = req.user.id;
-    const { steps = 5 } = req.body;
+    const { steps = 5 } = req.validated.body;
+    const io = req.app.get("io");
 
-    console.log(`🤖 Generating collapse prediction for user ${userId}, ${steps} steps ahead`);
+    const { result } = await predictionService.predictCollapse(userId, steps);
 
-    const result = await aiService.predictCollapse(userId, steps);
+    emitPredictionUpdate(io, userId, { type: "collapse", prediction: result.prediction });
 
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        error: result.error
-      });
-    }
-
-    // Log prediction event
     await logEvent({
-      type: 'prediction',
-      category: 'ecosystem',
-      message: `Collapse prediction generated: ${result.prediction.riskLevel} risk (${Math.round(result.prediction.collapseRisk * 100)}%)`,
-      severity: result.prediction.riskLevel === 'critical' ? 'critical' : 'info',
-      userId: userId,
+      type: "prediction",
+      category: "ecosystem",
+      message: `Collapse prediction generated: ${result.prediction.riskLevel} risk (${Math.round((result.prediction.collapseRisk || 0) * 100)}%)`,
+      severity: result.prediction.riskLevel === "critical" ? "critical" : "info",
+      userId,
       metadata: {
-        predictionType: 'collapse',
+        predictionType: "collapse",
         riskLevel: result.prediction.riskLevel,
         confidence: result.prediction.confidence,
-        stepsAhead: steps
-      },
-      io: req.app.get('io')
-    });
-
-    // Emit real-time prediction to user
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`user-${userId}`).emit('prediction-update', {
-        type: 'collapse',
-        prediction: result.prediction
-      });
-    }
-
-    res.json({
-      success: true,
-      prediction: result.prediction,
-      message: "Collapse prediction generated successfully"
-    });
-
-  } catch (error) {
-    console.error("❌ Error generating collapse prediction:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate collapse prediction",
-      message: error.message
-    });
-  }
-});
-
-/**
- * @desc Get population forecast
- * @route POST /api/predictions/forecast
- */
-router.post("/forecast", authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { steps = 7 } = req.body;
-
-    console.log(`📈 Generating population forecast for user ${userId}, ${steps} steps ahead`);
-
-    const result = await aiService.forecastPopulations(userId, steps);
-
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        error: result.error
-      });
-    }
-
-    // Log forecast event
-    await logEvent({
-      type: 'prediction',
-      category: 'ecosystem',
-      message: `Population forecast generated for ${steps} steps ahead (confidence: ${Math.round(result.forecast.confidence * 100)}%)`,
-      severity: 'info',
-      userId: userId,
-      metadata: {
-        predictionType: 'forecast',
         stepsAhead: steps,
-        confidence: result.forecast.confidence
       },
-      io: req.app.get('io')
+      io,
     });
 
-    // Emit real-time forecast to user
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`user-${userId}`).emit('prediction-update', {
-        type: 'forecast',
-        forecast: result.forecast
-      });
-    }
-
-    res.json({
-      success: true,
-      forecast: result.forecast,
-      message: "Population forecast generated successfully"
-    });
-
-  } catch (error) {
-    console.error("❌ Error generating population forecast:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate population forecast",
-      message: error.message
-    });
+    return sendSuccess(res, { prediction: result.prediction }, 200, "Collapse prediction generated successfully");
   }
-});
+);
 
-/**
- * @desc Get smart recommendations
- * @route POST /api/predictions/recommendations
- */
-router.post("/recommendations", authMiddleware, async (req, res) => {
-  try {
+router.post(
+  "/forecast",
+  authMiddleware,
+  validateRequest(stepsSchema),
+  async (req, res) => {
     const userId = req.user.id;
+    const { steps = 7 } = req.validated.body;
+    const io = req.app.get("io");
 
-    console.log(`💡 Generating smart recommendations for user ${userId}`);
+    const { result } = await predictionService.forecastPopulations(userId, steps);
 
-    const result = await aiService.generateRecommendations(userId);
+    emitPredictionUpdate(io, userId, { type: "forecast", forecast: result.forecast });
 
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        error: result.error
-      });
-    }
-
-    // Log recommendations event
     await logEvent({
-      type: 'prediction',
-      category: 'ecosystem',
-      message: `Smart recommendations generated: ${result.recommendations.length} actions suggested`,
-      severity: 'info',
-      userId: userId,
+      type: "prediction",
+      category: "ecosystem",
+      message: `Population forecast generated for ${steps} steps ahead (confidence: ${Math.round((result.forecast.confidence || 0) * 100)}%)`,
+      severity: "info",
+      userId,
       metadata: {
-        predictionType: 'recommendations',
-        actionCount: result.recommendations.length,
-        confidence: result.confidence
+        predictionType: "forecast",
+        stepsAhead: steps,
+        confidence: result.forecast.confidence,
       },
-      io: req.app.get('io')
+      io,
     });
 
-    // Emit real-time recommendations to user
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`user-${userId}`).emit('prediction-update', {
-        type: 'recommendations',
-        recommendations: result.recommendations,
-        reasoning: result.reasoning
-      });
-    }
+    return sendSuccess(res, { forecast: result.forecast }, 200, "Population forecast generated successfully");
+  }
+);
 
-    res.json({
-      success: true,
+router.post(
+  "/recommendations",
+  authMiddleware,
+  validateRequest(emptyBodySchema),
+  async (req, res) => {
+    const userId = req.user.id;
+    const io = req.app.get("io");
+
+    const { result } = await predictionService.generateRecommendations(userId);
+
+    emitPredictionUpdate(io, userId, {
+      type: "recommendations",
       recommendations: result.recommendations,
       reasoning: result.reasoning,
-      confidence: result.confidence,
-      message: "Smart recommendations generated successfully"
     });
 
-  } catch (error) {
-    console.error("❌ Error generating recommendations:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to generate recommendations",
-      message: error.message
-    });
-  }
-});
-
-/**
- * @desc Detect ecosystem patterns
- * @route POST /api/predictions/patterns
- */
-router.post("/patterns", authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    console.log(`🔍 Detecting ecosystem patterns for user ${userId}`);
-
-    const result = await aiService.detectPatterns(userId);
-
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        error: result.error
-      });
-    }
-
-    // Log pattern detection event
     await logEvent({
-      type: 'prediction',
-      category: 'ecosystem',
-      message: `Ecosystem patterns analyzed: Health score ${Math.round(result.patterns.healthScore * 100)}%`,
-      severity: 'info',
-      userId: userId,
+      type: "prediction",
+      category: "ecosystem",
+      message: `Smart recommendations generated: ${result.recommendations.length} actions suggested`,
+      severity: "info",
+      userId,
       metadata: {
-        predictionType: 'patterns',
-        healthScore: result.patterns.healthScore,
-        stability: result.patterns.stability
+        predictionType: "recommendations",
+        actionCount: result.recommendations.length,
+        confidence: result.confidence,
       },
-      io: req.app.get('io')
+      io,
     });
 
-    res.json({
-      success: true,
-      patterns: result.patterns,
-      message: "Ecosystem patterns detected successfully"
-    });
-
-  } catch (error) {
-    console.error("❌ Error detecting patterns:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to detect patterns",
-      message: error.message
-    });
+    return sendSuccess(
+      res,
+      {
+        recommendations: result.recommendations,
+        reasoning: result.reasoning,
+        confidence: result.confidence,
+      },
+      200,
+      "Smart recommendations generated successfully"
+    );
   }
-});
+);
 
-/**
- * @desc Get all predictions for user
- * @route GET /api/predictions
- */
-router.get("/", authMiddleware, async (req, res) => {
-  try {
+router.post(
+  "/patterns",
+  authMiddleware,
+  validateRequest(emptyBodySchema),
+  async (req, res) => {
     const userId = req.user.id;
-    const { type, limit = 20, accuracy } = req.query;
+    const io = req.app.get("io");
 
-    let query = { userId };
-    if (type && type !== 'all') query.type = type;
-    if (accuracy) query.accuracy = { $exists: true };
+    const { result } = await predictionService.detectPatterns(userId);
 
-    const predictions = await Prediction.find(query)
-      .sort({ timestamp: -1 })
-      .limit(parseInt(limit))
-      .lean();
+    await logEvent({
+      type: "prediction",
+      category: "ecosystem",
+      message: `Ecosystem patterns analyzed: Health score ${Math.round((result.patterns.healthScore || 0) * 100)}%`,
+      severity: "info",
+      userId,
+      metadata: {
+        predictionType: "patterns",
+        healthScore: result.patterns.healthScore,
+        stability: result.patterns.stability,
+      },
+      io,
+    });
 
-    // Add virtual fields
-    const predictionsWithVirtuals = predictions.map(prediction => ({
-      ...prediction,
-      summary: {
-        id: prediction._id,
-        type: prediction.type,
-        confidence: Math.round(prediction.confidence * 100),
-        ageInHours: Math.floor((new Date() - prediction.timestamp) / (1000 * 60 * 60)),
-        accuracy: prediction.accuracy ? Math.round(prediction.accuracy * 100) : null
-      }
-    }));
+    return sendSuccess(res, { patterns: result.patterns }, 200, "Ecosystem patterns detected successfully");
+  }
+);
 
-    res.json({
-      success: true,
+router.get("/", authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  const { type, limit = 20, accuracy } = req.query;
+
+  const predictions = await predictionService.listPredictions(userId, { type, accuracy, limit });
+
+  const predictionsWithVirtuals = predictions.map((prediction) => ({
+    ...prediction,
+    summary: buildPredictionSummary(prediction),
+  }));
+
+  return sendSuccess(
+    res,
+    {
       predictions: predictionsWithVirtuals,
       count: predictionsWithVirtuals.length,
-      filters: { type, limit, accuracy }
-    });
-
-  } catch (error) {
-    console.error("❌ Error fetching predictions:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch predictions",
-      message: error.message
-    });
-  }
+      filters: { type, limit, accuracy },
+    },
+    200,
+    "Predictions retrieved successfully"
+  );
 });
 
-/**
- * @desc Get prediction statistics
- * @route GET /api/predictions/stats
- */
 router.get("/stats", authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { days = 30 } = req.query;
+  const userId = req.user.id;
+  const { days = 30 } = req.query;
+  const parsedDays = parseInt(days, 10) || 30;
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - parsedDays);
 
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - parseInt(days));
+  const totalPredictions = await Prediction.countDocuments({
+    userId,
+    timestamp: { $gte: startDate },
+  });
 
-    // Get basic stats
-    const totalPredictions = await Prediction.countDocuments({
-      userId,
-      timestamp: { $gte: startDate }
-    });
+  const highConfidencePredictions = await Prediction.countDocuments({
+    userId,
+    timestamp: { $gte: startDate },
+    confidence: { $gte: 0.8 },
+  });
 
-    const highConfidencePredictions = await Prediction.countDocuments({
-      userId,
-      timestamp: { $gte: startDate },
-      confidence: { $gte: 0.8 }
-    });
+  const accuracyStats = await Promise.all([
+    Prediction.getAccuracyStats(userId, "collapse"),
+    Prediction.getAccuracyStats(userId, "forecast"),
+    Prediction.getAccuracyStats(userId, "recommendations"),
+  ]);
 
-    // Get accuracy stats by type
-    const accuracyStats = await Promise.all([
-      Prediction.getAccuracyStats(userId, 'collapse'),
-      Prediction.getAccuracyStats(userId, 'forecast'),
-      Prediction.getAccuracyStats(userId, 'recommendations')
-    ]);
+  const confidenceDistribution = await Prediction.getConfidenceDistribution(userId, parsedDays);
 
-    // Get confidence distribution
-    const confidenceDistribution = await Prediction.getConfidenceDistribution(userId, parseInt(days));
-
-    // Get predictions by type
-    const predictionsByType = await Prediction.aggregate([
-      {
-        $match: {
-          userId: new mongoose.Types.ObjectId(userId),
-          timestamp: { $gte: startDate }
-        }
+  const predictionsByType = await Prediction.aggregate([
+    {
+      $match: {
+        userId: new mongoose.Types.ObjectId(userId),
+        timestamp: { $gte: startDate },
       },
-      {
-        $group: {
-          _id: '$type',
-          count: { $sum: 1 },
-          averageConfidence: { $avg: '$confidence' },
-          latestPrediction: { $max: '$timestamp' }
-        }
-      }
-    ]);
+    },
+    {
+      $group: {
+        _id: "$type",
+        count: { $sum: 1 },
+        averageConfidence: { $avg: "$confidence" },
+        latestPrediction: { $max: "$timestamp" },
+      },
+    },
+  ]);
 
-    res.json({
-      success: true,
+  return sendSuccess(
+    res,
+    {
       stats: {
         summary: {
           totalPredictions,
           highConfidencePredictions,
-          accuracyRate: accuracyStats.reduce((sum, stat) => sum + stat.averageAccuracy, 0) / 3,
-          timeRange: `${days} days`
+          accuracyRate:
+            accuracyStats.length > 0
+              ? accuracyStats.reduce((sum, stat) => sum + (stat.averageAccuracy || 0), 0) / accuracyStats.length
+              : 0,
+          timeRange: `${parsedDays} days`,
         },
         byType: {
           collapse: accuracyStats[0],
           forecast: accuracyStats[1],
-          recommendations: accuracyStats[2]
+          recommendations: accuracyStats[2],
         },
         distribution: {
           confidence: confidenceDistribution,
-          types: predictionsByType
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error("❌ Error fetching prediction stats:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch prediction statistics",
-      message: error.message
-    });
-  }
-});
-
-/**
- * @desc Get latest predictions by type
- * @route GET /api/predictions/latest/:type
- */
-router.get("/latest/:type", authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { type } = req.params;
-    const { limit = 5 } = req.query;
-
-    const predictions = await Prediction.getLatestByType(userId, type, parseInt(limit));
-
-    res.json({
-      success: true,
-      predictions,
-      type,
-      count: predictions.length
-    });
-
-  } catch (error) {
-    console.error(`❌ Error fetching latest ${req.params.type} predictions:`, error);
-    res.status(500).json({
-      success: false,
-      error: `Failed to fetch latest ${req.params.type} predictions`,
-      message: error.message
-    });
-  }
-});
-
-/**
- * @desc Evaluate prediction accuracy (when actual outcome is known)
- * @route PUT /api/predictions/:id/evaluate
- */
-router.put("/:id/evaluate", authMiddleware, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { actualOutcome } = req.body;
-
-    const prediction = await Prediction.findOne({ _id: id, userId: req.user.id });
-
-    if (!prediction) {
-      return res.status(404).json({
-        success: false,
-        error: "Prediction not found"
-      });
-    }
-
-    if (prediction.accuracy !== undefined) {
-      return res.status(400).json({
-        success: false,
-        error: "Prediction has already been evaluated"
-      });
-    }
-
-    await prediction.evaluateAccuracy(actualOutcome);
-
-    // Log evaluation event
-    await logEvent({
-      type: 'info',
-      category: 'ecosystem',
-      message: `Prediction evaluated: ${Math.round(prediction.accuracy * 100)}% accuracy`,
-      severity: 'info',
-      userId: req.user.id,
-      metadata: {
-        predictionId: id,
-        predictionType: prediction.type,
-        accuracy: prediction.accuracy
+          types: predictionsByType,
+        },
       },
-      io: req.app.get('io')
-    });
+    },
+    200,
+    "Prediction statistics retrieved successfully"
+  );
+});
 
-    res.json({
-      success: true,
+router.get("/latest/:type", authMiddleware, async (req, res) => {
+  const userId = req.user.id;
+  const { type } = req.params;
+  const limit = parseInt(req.query.limit, 10) || 5;
+
+  const predictions = await Prediction.getLatestByType(userId, type, limit);
+
+  return sendSuccess(
+    res,
+    { predictions, type, count: predictions.length },
+    200,
+    `Latest ${type} predictions retrieved successfully`
+  );
+});
+
+router.put("/:id/evaluate", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { actualOutcome } = req.body;
+
+  const prediction = await Prediction.findOne({ _id: id, userId: req.user.id });
+  if (!prediction) throw new AppError("Prediction not found", 404);
+  if (prediction.accuracy !== undefined) throw new AppError("Prediction has already been evaluated", 400);
+
+  await prediction.evaluateAccuracy(actualOutcome);
+  const io = req.app.get("io");
+
+  await logEvent({
+    type: "info",
+    category: "ecosystem",
+    message: `Prediction evaluated: ${Math.round((prediction.accuracy || 0) * 100)}% accuracy`,
+    severity: "info",
+    userId: req.user.id,
+    metadata: {
+      predictionId: id,
+      predictionType: prediction.type,
+      accuracy: prediction.accuracy,
+    },
+    io,
+  });
+
+  return sendSuccess(
+    res,
+    {
       prediction: {
         id: prediction._id,
         type: prediction.type,
-        accuracy: Math.round(prediction.accuracy * 100),
-        evaluatedAt: prediction.evaluatedAt
+        accuracy: Math.round((prediction.accuracy || 0) * 100),
+        evaluatedAt: prediction.evaluatedAt,
       },
-      message: "Prediction accuracy evaluated successfully"
-    });
-
-  } catch (error) {
-    console.error("❌ Error evaluating prediction:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to evaluate prediction",
-      message: error.message
-    });
-  }
+    },
+    200,
+    "Prediction accuracy evaluated successfully"
+  );
 });
 
-/**
- * @desc Train AI models (admin only)
- * @route POST /api/predictions/train
- */
 router.post("/train", authMiddleware, async (req, res) => {
-  try {
-    // Check if user is admin (you'll need to implement this check)
-    if (!req.user.isAdmin) {
-      return res.status(403).json({
-        success: false,
-        error: "Admin access required"
-      });
-    }
+  if (!req.user.isAdmin) throw new AppError("Admin access required", 403);
 
-    const { modelType = 'all', dataLimit = 1000 } = req.body;
+  const { modelType = "all", dataLimit = 1000 } = req.body;
+  const io = req.app.get("io");
 
-    console.log(`🎯 Starting model training: ${modelType}`);
+  const job = await addJob("background-tasks", "ml-training", {
+    userId: req.user.id,
+    modelType,
+    dataLimit,
+  });
 
-    // This would trigger model training in the Python service
-    // For now, we'll simulate the training process
-    const trainingResult = {
-      success: true,
-      message: `Model training initiated for ${modelType}`,
-      estimatedTime: '10-15 minutes',
-      dataPoints: dataLimit
-    };
+  await logEvent({
+    type: "info",
+    category: "system",
+    message: `AI model training queued in background: ${modelType} (Job ID: ${job?.id})`,
+    severity: "info",
+    userId: req.user.id,
+    metadata: {
+      modelType,
+      dataLimit,
+      initiatedBy: req.user.id,
+      jobId: job?.id,
+    },
+    io,
+  });
 
-    // Log training event
-    await logEvent({
-      type: 'info',
-      category: 'system',
-      message: `AI model training started: ${modelType}`,
-      severity: 'info',
-      userId: req.user.id,
-      metadata: {
-        modelType,
-        dataLimit,
-        initiatedBy: req.user.id
+  return sendSuccess(
+    res,
+    {
+      training: {
+        jobId: job?.id,
+        estimatedTime: "2-5 minutes",
+        dataPoints: dataLimit,
       },
-      io: req.app.get('io')
-    });
-
-    res.json({
-      success: true,
-      training: trainingResult,
-      message: "Model training initiated successfully"
-    });
-
-  } catch (error) {
-    console.error("❌ Error training models:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to initiate model training",
-      message: error.message
-    });
-  }
+    },
+    202,
+    "Model training initiated successfully"
+  );
 });
 
 module.exports = router;

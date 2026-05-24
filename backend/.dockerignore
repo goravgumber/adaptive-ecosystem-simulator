@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log*
+.env
+logs
+coverage
+ml-service/.venv
+ml-service/venv
+ml-service/__pycache__
+ml-service/logs
+ml-service/**/*.pyc

@@ -1,10 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const Simulation = require("../models/Simulation"); 
+const Simulation = require("../models/Simulation");
+
+const cache = require("../utils/cache");
+const logger = require("../config/logger");
 
 router.get("/summary", async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit) : 0;
+    const cacheKey = `reports:summary:${limit}`;
+
+    // Try to fetch from Redis cache
+    const cachedData = await cache.get(cacheKey);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
 
     const data = await Simulation.find({})
       .sort({ step: 1 })
@@ -31,9 +41,14 @@ router.get("/summary", async (req, res) => {
       summary.min[key] = Math.min(...values);
     });
 
-    res.json({ data, summary });
+    const responsePayload = { data, summary };
+
+    // Store in cache for 60 seconds
+    await cache.set(cacheKey, responsePayload, 60);
+
+    res.json(responsePayload);
   } catch (err) {
-    console.error(err);
+    logger.error("Failed to fetch reports: %s", err.message);
     res.status(500).json({ error: "Failed to fetch reports" });
   }
 });

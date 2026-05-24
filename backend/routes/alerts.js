@@ -1,6 +1,7 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const Simulation = require("../models/Simulation");
+const logger = require("../config/logger");
 
 // Factory function that accepts Socket.IO instance
 const alertsRoutesFactory = (io) => {
@@ -21,14 +22,14 @@ const alertsRoutesFactory = (io) => {
       const { plants, herbivores, carnivores } = latest;
       const alerts = [];
 
-      // 🔔 Critical conditions
-      if (plants < 10) alerts.push({ type: "danger", message: "🚨 Plant levels are almost depleted!" });
-      if (herbivores === 0) alerts.push({ type: "danger", message: "🐇 All herbivores are extinct!" });
-      if (carnivores === 0) alerts.push({ type: "warning", message: "🦊 Carnivore population collapsed." });
+      // Critical conditions
+      if (plants < 10) alerts.push({ type: "danger", message: "Plant levels are almost depleted." });
+      if (herbivores === 0) alerts.push({ type: "danger", message: "All herbivores are extinct." });
+      if (carnivores === 0) alerts.push({ type: "warning", message: "Carnivore population collapsed." });
 
-      // ⚠️ Warning conditions
-      if (herbivores > plants * 2) alerts.push({ type: "warning", message: "⚠️ Too many herbivores compared to available plants." });
-      if (carnivores > herbivores * 3) alerts.push({ type: "warning", message: "⚠️ Predator overload may collapse herbivore population." });
+      // Warning conditions
+      if (herbivores > plants * 2) alerts.push({ type: "warning", message: "Too many herbivores compared to available plants." });
+      if (carnivores > herbivores * 3) alerts.push({ type: "warning", message: "Predator overload may collapse herbivore population." });
 
       const responseData = {
         step: latest.step,
@@ -43,7 +44,7 @@ const alertsRoutesFactory = (io) => {
 
       res.json(responseData);
     } catch (err) {
-      console.error("❌ Error fetching alerts:", err);
+      logger.error("Error fetching alerts: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });
@@ -55,7 +56,7 @@ const alertsRoutesFactory = (io) => {
   router.get("/history", authMiddleware, async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 20;
-      
+
       const simulations = await Simulation.find({ userId: req.user.id })
         .sort({ step: -1 })
         .limit(limit)
@@ -66,11 +67,11 @@ const alertsRoutesFactory = (io) => {
         const { plants, herbivores, carnivores, step, template, createdAt } = sim;
 
         // Generate alerts for each historical step
-        if (plants < 10) alerts.push({ type: "danger", message: "🚨 Plant levels were almost depleted!" });
-        if (herbivores === 0) alerts.push({ type: "danger", message: "🐇 All herbivores were extinct!" });
-        if (carnivores === 0) alerts.push({ type: "warning", message: "🦊 Carnivore population collapsed." });
-        if (herbivores > plants * 2) alerts.push({ type: "warning", message: "⚠️ Too many herbivores compared to available plants." });
-        if (carnivores > herbivores * 3) alerts.push({ type: "warning", message: "⚠️ Predator overload may collapse herbivore population." });
+        if (plants < 10) alerts.push({ type: "danger", message: "Plant levels were almost depleted." });
+        if (herbivores === 0) alerts.push({ type: "danger", message: "All herbivores were extinct." });
+        if (carnivores === 0) alerts.push({ type: "warning", message: "Carnivore population collapsed." });
+        if (herbivores > plants * 2) alerts.push({ type: "warning", message: "Too many herbivores compared to available plants." });
+        if (carnivores > herbivores * 3) alerts.push({ type: "warning", message: "Predator overload may collapse herbivore population." });
 
         return {
           step,
@@ -86,7 +87,7 @@ const alertsRoutesFactory = (io) => {
         history: alertHistory
       });
     } catch (err) {
-      console.error("❌ Error fetching alert history:", err);
+      logger.error("Error fetching alert history: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });
@@ -98,14 +99,14 @@ const alertsRoutesFactory = (io) => {
   router.post("/monitor", authMiddleware, async (req, res) => {
     try {
       const { userId } = req.user;
-      
+
       // Set up real-time monitoring for this user
       const monitoringRoom = `alerts-${userId}`;
-      
+
       // Join user to their personal alert room
       // Note: This would typically be handled in Socket.IO connection event
       // but can be triggered via this endpoint
-      
+
       res.json({
         message: "Alert monitoring activated",
         room: monitoringRoom,
@@ -119,7 +120,7 @@ const alertsRoutesFactory = (io) => {
       });
 
     } catch (err) {
-      console.error("❌ Error setting up alert monitoring:", err);
+      logger.error("Error setting up alert monitoring: %s", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });

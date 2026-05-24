@@ -1,6 +1,7 @@
 const express = require("express");
 const authMiddleware = require("../middleware/auth");
 const Log = require("../models/Log");
+const logger = require("../config/logger");
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.get("/", authMiddleware, async (req, res) => {
 
     res.json({ logs: formatted });
   } catch (err) {
-    console.error("Logs fetch error:", err);
+    logger.error("Logs fetch error: %s", err.message);
     res.status(500).json({ message: "Server error" });
   }
 });

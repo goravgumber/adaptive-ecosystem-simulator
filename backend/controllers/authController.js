@@ -1,72 +1,77 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+const authService = require("../services/authService");
+const { sendSuccess } = require("../utils/responseFormatter");
 
-// Signup
-const signup = async (req, res) => {
+const signup = async (req, res, next) => {
   try {
     const { username, password } = req.body;
-
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(400).json({ error: "Username already taken" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = new User({ username, password: hashedPassword });
-    await newUser.save();
-
-    res.status(201).json({ message: "User created successfully" });
+    const user = await authService.signup({ username, password });
+    return sendSuccess(res, user, 201, "User created successfully");
   } catch (err) {
-    console.error("❌ Signup error:", err);
-    res.status(500).json({ error: "Server error" });
+    next(err);
   }
 };
 
-// Login
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
     const { username, password } = req.body;
+    const result = await authService.login({ username, password });
+    return sendSuccess(res, result, 200, "Login successful");
+  } catch (err) {
+    next(err);
+  }
+};
 
-    const user = await User.findOne({ username });
-    if (!user) {
-      return res.status(400).json({ error: "Invalid credentials" });
-    }
+const refresh = async (req, res, next) => {
+  try {
+    const result = await authService.refresh(req.body.refreshToken);
+    return sendSuccess(res, result, 200, "Token refreshed successfully");
+  } catch (err) {
+    next(err);
+  }
+};
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: "Invalid credentials" });
-    }
+const logout = async (req, res, next) => {
+  try {
+    const result = await authService.logout({
+      accessToken: req.accessToken,
+      refreshToken: req.body.refreshToken,
+      userId: req.user.id,
+    });
+    return sendSuccess(res, result, 200, "Logged out successfully");
+  } catch (err) {
+    next(err);
+  }
+};
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET || "secretkey",
-      { expiresIn: "7d" }
+const logoutAll = async (req, res, next) => {
+  try {
+    const result = await authService.logoutAll(req.user.id);
+    return sendSuccess(res, result, 200, "All sessions revoked successfully");
+  } catch (err) {
+    next(err);
+  }
+};
+
+const validateToken = async (req, res, next) => {
+  try {
+    return sendSuccess(
+      res,
+      { valid: true, userId: req.user.id, role: req.user.role || "user" },
+      200,
+      "Token is valid"
     );
-
-    res.json({ token, user: { id: user._id, username: user.username } });
   } catch (err) {
-    console.error("❌ Login error:", err);
-    res.status(500).json({ error: "Server error" });
+    next(err);
   }
 };
 
-const validateToken = async (req, res) => {
-  res.json({ valid: true, userId: req.user.id });
-};
-
-const getProfile = async (req, res) => {
+const getProfile = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).select("_id username createdAt");
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    res.json({ user });
+    const user = await authService.getProfile(req.user.id);
+    return sendSuccess(res, { user }, 200, "Profile fetched successfully");
   } catch (err) {
-    console.error("❌ Get profile error:", err);
-    res.status(500).json({ error: "Server error" });
+    next(err);
   }
 };
 
-module.exports = { signup, login, validateToken, getProfile };
+module.exports = { signup, login, refresh, logout, logoutAll, validateToken, getProfile };

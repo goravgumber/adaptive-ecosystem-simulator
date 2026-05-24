@@ -3,7 +3,10 @@ const config = require("../config/env");
 const logger = require("../utils/logger");
 
 const socketAuth = (socket, next) => {
-  const token = socket.handshake.auth?.token || socket.handshake.headers?.authorization?.split(" ")[1];
+  const token =
+    socket.handshake.auth?.token ||
+    socket.handshake.query?.token ||
+    socket.handshake.headers?.authorization?.split(" ")[1];
 
   if (!token) {
     logger.warn("Socket connection rejected: no token provided");

@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const fetch = global.fetch || require('node-fetch');
 const Simulation = require('../models/Simulation');
 const Prediction = require('../models/Prediction');
+const logger = require('../config/logger');
 
 class AIService {
   constructor() {
@@ -29,20 +30,20 @@ class AIService {
 
   async initialize() {
     try {
-      console.log('🤖 Initializing AI Service...');
+      logger.info(' Initializing AI Service...');
       await this.loadModels();
       const started = await this.startPythonService();
       this.isInitialized = started;
 
       if (started) {
-        console.log('✅ AI Service initialized successfully');
+        logger.info(' AI Service initialized successfully');
       } else {
-        console.warn('⚠️ AI Service initialization failed; Python ML service did not start cleanly');
+        logger.warn(' AI Service initialization failed; Python ML service did not start cleanly');
       }
 
       return started;
     } catch (error) {
-      console.error('❌ Failed to initialize AI Service:', error);
+      logger.error(' Failed to initialize AI Service: %s', error.message);
       this.mlServiceError = error.message;
       return false;
     }
@@ -56,26 +57,36 @@ class AIService {
       const collapsePath = path.join(modelsDir, 'collapse-predictor', 'model.json');
       try {
         this.models.collapsePredictor = await tf.loadLayersModel(`file://${collapsePath}`);
-        console.log('✅ Collapse predictor model loaded');
+        logger.info(' Collapse predictor model loaded');
       } catch (err) {
-        console.log('ℹ️ Collapse predictor model not found locally');
+        logger.info(' Collapse predictor model not found locally');
       }
 
       const populationPath = path.join(modelsDir, 'population-forecaster', 'model.json');
       try {
         this.models.populationForecaster = await tf.loadLayersModel(`file://${populationPath}`);
-        console.log('✅ Population forecaster model loaded');
+        logger.info(' Population forecaster model loaded');
       } catch (err) {
-        console.log('ℹ️ Population forecaster model not found locally');
+        logger.info(' Population forecaster model not found locally');
       }
     } catch (error) {
-      console.error('❌ Error loading TensorFlow.js models:', error);
+      logger.error(' Error loading TensorFlow.js models: %s', error.message);
     }
   }
 
   async startPythonService() {
     if (this.mlServiceReady) return true;
     if (this.mlServiceStarting) return this.waitForStartup();
+
+    try {
+      if (await this._verifyHealthEndpoint()) {
+        this.mlServiceReady = true;
+        logger.info("Using configured ML service at %s", this.pythonServiceUrl);
+        return true;
+      }
+    } catch (error) {
+      logger.debug("Configured ML service is not ready; starting local process: %s", error.message);
+    }
 
     this.mlServiceStarting = true;
     this.mlServiceError = null;
@@ -90,7 +101,7 @@ class AIService {
         }
       } catch (error) {
         this.mlServiceError = error.message;
-        console.error(`Python ML service startup attempt ${attempt} failed:`, error.message);
+        logger.error('Python ML service startup attempt %d failed: %s', attempt, error.message);
         if (attempt < this.maxRetries) {
           await new Promise((resolve) => setTimeout(resolve, this.retryIntervalMs));
         }
@@ -281,7 +292,7 @@ class AIService {
         },
       };
     } catch (error) {
-      console.error('❌ Error predicting collapse:', error);
+      logger.error(' Error predicting collapse: %s', error.message);
       return {
         success: false,
         error: error.message,
@@ -331,7 +342,7 @@ class AIService {
         },
       };
     } catch (error) {
-      console.error('❌ Error forecasting populations:', error);
+      logger.error(' Error forecasting populations: %s', error.message);
       return {
         success: false,
         error: error.message,
@@ -353,7 +364,7 @@ class AIService {
 
       return await response.json();
     } catch (error) {
-      console.warn('Python service unavailable, using fallback predictions');
+      logger.warn('Python service unavailable, using fallback predictions');
       return this.generateFallbackPrediction(endpoint, data);
     }
   }
@@ -367,7 +378,7 @@ class AIService {
         .lean();
       return data.reverse();
     } catch (error) {
-      console.error('Error fetching simulation data:', error);
+      logger.error('Error fetching simulation data: %s', error.message);
       return [];
     }
   }
@@ -498,7 +509,7 @@ class AIService {
       await prediction.save();
       return prediction;
     } catch (error) {
-      console.error('Error storing prediction:', error);
+      logger.error('Error storing prediction: %s', error.message);
       return null;
     }
   }

@@ -1,4 +1,5 @@
 const Simulation = require("../models/Simulation");
+const logger = require("../config/logger");
 
 // Get dashboard stats, trend & growth for a logged-in user
 const getDashboardData = async (req, res) => {
@@ -27,7 +28,7 @@ const getDashboardData = async (req, res) => {
       tick: latest.step,
     };
 
-    // Build chronological trend (oldest → newest)
+    // Build chronological trend (oldest  newest)
     const trend = simulations
       .map((s) => ({
         step: s.step,
@@ -58,7 +59,7 @@ const getDashboardData = async (req, res) => {
 
     res.json({ stats, trend, growth });
   } catch (err) {
-    console.error("❌ Dashboard fetch error:", err);
+    logger.error(" Dashboard fetch error: %s", err.message);
     res.status(500).json({ message: "Server error" });
   }
 };
