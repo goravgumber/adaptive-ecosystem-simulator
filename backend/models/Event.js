@@ -4,8 +4,8 @@ const eventSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: [
-      'info', 'warning', 'error', 'success', 
-      'user_action', 'system_alert', 'ecosystem_alert', 
+      'info', 'warning', 'error', 'success',
+      'prediction', 'user_action', 'system_alert', 'ecosystem_alert',
       'ecosystem_collapse', 'database_event', 'security_event'
     ],
     required: true,

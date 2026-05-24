@@ -11,7 +11,7 @@ const simulationSchema = new mongoose.Schema(
 
     events: [
       {
-        type: { type: String, default: "ecosystem" }, 
+        type: { type: String, default: "ecosystem" },
         message: { type: String },
         severity: {
           type: String,
@@ -29,6 +29,16 @@ const simulationSchema = new mongoose.Schema(
     },
 
     time: { type: Date, default: Date.now },
+
+    sessionId: { type: mongoose.Schema.Types.ObjectId },
+    endedAt: { type: Date },
+    duration: { type: Number },
+    outcome: { type: String, enum: ["stable", "collapsed", "paused"] },
+    peakPopulations: {
+      plants: { type: Number },
+      herbivores: { type: Number },
+      carnivores: { type: Number },
+    },
   },
   { timestamps: true }
 );

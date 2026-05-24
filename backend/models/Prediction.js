@@ -30,7 +30,7 @@ const predictionSchema = new mongoose.Schema({
   },
   stepsAhead: {
     type: Number,
-    min: 1,
+    min: 0,
     max: 50,
     default: 1
   },
