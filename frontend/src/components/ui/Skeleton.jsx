@@ -1,15 +1,18 @@
-const variants = {
-  text: "h-4 w-full",
-  title: "h-6 w-3/4",
-  block: "h-full",
-};
+export default function Skeleton({ width, height, className = "", variant = "line" }) {
+  const variants = {
+    line: "h-3 rounded-full",
+    block: "rounded-md", 
+    circle: "rounded-full"
+  }
 
-export default function Skeleton({ variant, width, height, className = "" }) {
-  const variantClass = variants[variant] || "";
+  const style = {}
+  if (width) style.width = width
+  if (height) style.height = height
+
   return (
-    <div
-      className={`bg-elevated animate-pulse rounded ${variantClass} ${className}`}
-      style={{ width, height }}
+    <div 
+      className={`bg-bg-raised animate-pulse ${variants[variant]} ${className}`}
+      style={style}
     />
-  );
+  )
 }

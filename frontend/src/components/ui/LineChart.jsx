@@ -1,58 +1,83 @@
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
-import { formatPop } from "../../utils/format";
+import {
+  LineChart as RechartsLineChart,
+  Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+} from "recharts"
 
-export default function LineChart({ data = [], series = [], height = 280 }) {
-  if (!data.length) return null;
+const defaultColors = ["#22C55E", "#60A5FA", "#F87171", "#F59E0B", "#A78BFA", "#34D399"]
+
+export default function LineChart({
+  data = [], 
+  series = [], 
+  height = 200,
+  showDots = false,
+  yFormatter = (v) => v >= 1000 ? (v / 1000).toFixed(0) + "K" : Math.round(v),
+}) {
+  if (!data || data.length === 0) {
+    return (
+      <div style={{ height }} className="flex items-center justify-center text-ink-muted text-xs font-mono">
+        No data available
+      </div>
+    )
+  }
+
+  if (!series || series.length === 0) {
+    return (
+      <div style={{ height }} className="flex items-center justify-center text-ink-muted text-xs font-mono">
+        No series configured
+      </div>
+    )
+  }
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-        <defs>
-          {series.map((s) => (
-            <linearGradient key={s.key} id={`gradient-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
-              <stop offset="95%" stopColor={s.color} stopOpacity={0} />
-            </linearGradient>
-          ))}
-        </defs>
-        <CartesianGrid stroke="#1C2E1C" strokeDasharray="3 3" vertical={false} />
+      <RechartsLineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+        <CartesianGrid 
+          stroke="#1A2E1A" 
+          strokeDasharray="3 3"
+          horizontal={true} 
+          vertical={false}
+        />
         <XAxis
-          stroke="#4D7A4D"
-          tick={{ fill: "#4D7A4D", fontSize: 11, fontFamily: "JetBrains Mono" }}
+          stroke="transparent"
+          tick={{ fill: "#4D6B4D", fontSize: 11, fontFamily: "JetBrains Mono" }}
+          tickLine={false} 
           axisLine={false}
-          tickLine={false}
         />
         <YAxis
-          stroke="#4D7A4D"
-          tick={{ fill: "#4D7A4D", fontSize: 11, fontFamily: "JetBrains Mono" }}
+          stroke="transparent"
+          tick={{ fill: "#4D6B4D", fontSize: 11, fontFamily: "JetBrains Mono" }}
+          tickLine={false} 
           axisLine={false}
-          tickLine={false}
-          tickFormatter={formatPop}
+          tickFormatter={yFormatter}
+          width={45}
         />
         <Tooltip
           contentStyle={{
-            background: "#0D1A0D",
-            border: "1px solid #1C2E1C",
-            borderRadius: "8px",
-            color: "#E8F5E8",
+            background: "#0A1409", 
+            border: "1px solid #243824",
+            borderRadius: "6px", 
             fontSize: "12px",
-            fontFamily: "JetBrains Mono",
+            fontFamily: "JetBrains Mono", 
+            color: "#E2F0E2",
+            padding: "8px 12px", 
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)"
           }}
+          formatter={(value) => [Math.round(value).toLocaleString(), undefined]}
+          labelStyle={{ color: "#8FAF8F", marginBottom: "4px" }}
         />
-        <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", color: "#A3C4A3" }} />
-        {series.map((s) => (
-          <Area
-            key={s.key}
+        {series.map((s, i) => (
+          <Line
+            key={s.key || i}
             type="monotone"
             dataKey={s.key}
-            stroke={s.color}
-            fill={`url(#gradient-${s.key})`}
-            strokeWidth={2}
-            dot={data.length < 20}
-            name={s.label}
+            stroke={s.color || defaultColors[i % defaultColors.length]}
+            strokeWidth={1.5}
+            dot={showDots ? { r: 2.5, fill: s.color } : false}
+            activeDot={{ r: 4, strokeWidth: 0 }}
+            strokeDasharray={s.dashed ? "4 4" : undefined}
           />
         ))}
-      </AreaChart>
+      </RechartsLineChart>
     </ResponsiveContainer>
-  );
+  )
 }

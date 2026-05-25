@@ -1,21 +1,32 @@
-const styles = {
-  info: "border-l-info bg-info-muted/50 text-text-primary",
-  warning: "border-l-warning bg-warning-muted/50 text-warning",
-  error: "border-l-danger bg-danger-muted/50 text-danger",
-  success: "border-l-accent bg-accent-muted/50 text-accent",
-};
+import { useEffect } from "react"
 
-export default function Alert({ type = "info", message, onDismiss, className = "" }) {
+export default function Alert({ variant = "info", onClose, children, className = "" }) {
+  useEffect(() => {
+    if (onClose) {
+      const timer = setTimeout(onClose, 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [onClose])
+
+  const variants = {
+    info: "border-status-info/20 bg-blue-950/20 text-ink-primary",
+    warning: "border-status-warning/20 bg-warning-bg text-ink-primary",
+    danger: "border-status-danger/20 bg-danger-bg text-ink-primary",
+    success: "border-green-vivid/20 bg-green-ghost text-ink-primary",
+  }
+
   return (
-    <div className={`border-l-[3px] rounded-lg p-3 flex items-start justify-between gap-2 ${styles[type]} ${className}`}>
-      <span className="text-sm">{message}</span>
-      {onDismiss && (
-        <button onClick={onDismiss} className="shrink-0 opacity-70 hover:opacity-100 transition-opacity">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
+    <div className={`flex items-start gap-3 px-3.5 py-2.5 border rounded-md text-sm leading-relaxed animate-fade-in ${variants[variant] || variants.info} ${className}`}>
+      <div className="flex-1 min-w-0">{children}</div>
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="shrink-0 text-ink-muted hover:text-ink-primary transition-colors cursor-pointer"
+          aria-label="Close alert"
+        >
+          &times;
         </button>
       )}
     </div>
-  );
+  )
 }

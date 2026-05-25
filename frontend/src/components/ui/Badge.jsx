@@ -1,17 +1,26 @@
-const variants = {
-  success: "text-accent bg-accent-muted border-accent/20",
-  warning: "text-warning bg-warning-muted border-warning/20",
-  danger: "text-danger bg-danger-muted border-danger/20",
-  neutral: "text-text-secondary bg-elevated border-border",
-  info: "text-info bg-info-muted border-info/20",
-};
+export default function Badge({ variant = "neutral", size = "sm", dot = false, children, className = "" }) {
+  const variants = {
+    ok: "text-ok bg-ok-bg border-ok-edge",
+    warn: "text-warn bg-warn-bg border-warn-edge", 
+    danger: "text-danger bg-danger-bg border-danger-edge",
+    info: "text-cyan bg-info-bg border-info-edge",
+    neutral: "text-mid bg-raised border-edge",
+    running: "text-warn bg-warn-bg border-warn-edge",
+  }
 
-export default function Badge({ variant = "neutral", children, className = "" }) {
+  const dotColors = {
+    ok: "bg-ok",
+    warn: "bg-warn",
+    danger: "bg-danger", 
+    info: "bg-cyan",
+    neutral: "bg-mid",
+    running: "bg-warn animate-pulse",
+  }
+
   return (
-    <span
-      className={`inline-flex items-center text-xs font-mono px-2 py-0.5 rounded-full border uppercase tracking-wider ${variants[variant]} ${className}`}
-    >
+    <span className={`text-2xs font-mono px-2 py-0.5 rounded-full border inline-flex items-center gap-1.5 ${variants[variant] || variants.neutral} ${className}`}>
+      {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotColors[variant] || dotColors.neutral}`} />}
       {children}
     </span>
-  );
+  )
 }

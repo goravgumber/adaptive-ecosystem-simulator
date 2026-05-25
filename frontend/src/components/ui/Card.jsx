@@ -1,13 +1,23 @@
-export default function Card({ header, title, padding = "p-4", children, className = "" }) {
+export default function Card({ children, className = "", padding = "md", header }) {
+  const paddings = {
+    none: "p-0",
+    sm: "p-3", 
+    md: "p-4",
+    lg: "p-5"
+  }
+
   return (
-    <div className={`bg-surface border border-border rounded-lg shadow-card card-hover ${padding} ${className}`}>
-      {(header || title) && (
-        <div className="border-b border-border pb-3 mb-3">
-          {title && <span className="text-text-secondary text-xs font-mono uppercase tracking-wider">{title}</span>}
-          {header}
+    <div className={`bg-panel border border-edge rounded-lg ${className}`}>
+      {header && (
+        <div className="px-4 pt-4 pb-3 border-b border-edge">
+          <span className="text-2xs font-mono text-lo uppercase tracking-[0.08em]">
+            {header}
+          </span>
         </div>
       )}
-      {children}
+      <div className={paddings[padding]}>
+        {children}
+      </div>
     </div>
-  );
+  )
 }

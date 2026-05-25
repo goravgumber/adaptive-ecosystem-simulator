@@ -1,34 +1,33 @@
-import { useEffect } from "react";
+import { useEffect } from "react"
 
-export default function Modal({ isOpen, onClose, title, children }) {
+export default function Modal({ open, onClose, title, children }) {
   useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [isOpen, onClose]);
+    if (!open) return
+    const handler = (e) => { if (e.key === "Escape") onClose?.() }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [open, onClose])
 
-  if (!isOpen) return null;
+  if (!open) return null
 
   return (
-    <div className="fixed inset-0 bg-base/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative bg-surface border border-border rounded-xl shadow-glow-md max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto">
-        <div className="flex justify-between items-center p-5 border-b border-border">
-          <h2 className="text-text-primary font-medium">{title}</h2>
-          <button
-            onClick={onClose}
-            className="border border-border hover:border-border-bright text-text-secondary hover:text-text-primary hover:bg-elevated transition-all duration-150 rounded p-1"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-bg-panel border border-line-normal rounded-lg w-full max-w-lg mx-4 shadow-2xl animate-fade-in">
+        {title && (
+          <div className="flex items-center justify-between px-5 py-4 border-b border-line-subtle">
+            <h2 className="text-sm font-medium text-ink-primary">{title}</h2>
+            <button
+              onClick={onClose}
+              className="text-ink-muted hover:text-ink-primary transition-colors cursor-pointer"
+              aria-label="Close modal"
+            >
+              &times;
+            </button>
+          </div>
+        )}
         <div className="p-5">{children}</div>
       </div>
     </div>
-  );
+  )
 }
